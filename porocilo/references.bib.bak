@@ -1,0 +1,19 @@
+
+@misc{freertos,
+	title = {Operacijski sistem FreeRTOS},
+	author = {Web source},
+	howpublished = "\url{https://www.freertos.org/}"
+}
+
+@article{bso,
+    title={Brezžična senzorska omrežja},
+    author={Zimic, Nikolaj},
+    year={2021}
+}
+
+@book{holger,
+	title = {Ad hoc and Sensor Networks},
+	author = {Holger, Karl},
+	year = {2005}
+}
+
