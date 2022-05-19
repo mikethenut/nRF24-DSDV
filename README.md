@@ -20,8 +20,9 @@ Ker je cilj izdelati usmerjevalni algoritem, je potrebno postaviti tri stvari:
 
 ## Viri
 
-- prosojnice predavanj (?)
-- ... ?
+- https://github.com/thllwg/efficient-dsdv
+- https://github.com/lukeflima/DSDV
+- https://github.com/elliamlee/newDSDV
 
 
 
