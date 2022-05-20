@@ -7,7 +7,7 @@
 ** USER CONFIGURATION
 */
 
-// Network channel and address (used to communicate with any device)
+// Network channel and address (used to communicate with any on-line device)
 const uint8_t channel = 78;
 const uint8_t network_address[] = {0x6E, 0x52, 0x46};
 
@@ -147,7 +147,7 @@ void format_packet() {
 			}
 		}
 
-		// Fill unused rows with network address to signify irrelevance
+		// Insert dummy rows with network address for unused space
 		for(int i = row; i < ROWS_PER_MSG; i++) {
 			for(int j = 0; j < ADDR_LEN; j++)
 				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
@@ -185,14 +185,21 @@ void full_table_dump() {
 		routing_table[i].modified = false;
 
 		row++;
-		if(row == 4) {
+		if(row == ROWS_PER_MSG) {
 			nRF24_transmit();
 			row = 1;
 		}
 	}
 
-	if(row > 1)
+	// Send rest of data (if any)
+	if(row > 1) {
+		// Insert dummy rows with network address for unused space
+		for(int i = row; i < ROWS_PER_MSG; i++) {
+			for(int j = 0; j < ADDR_LEN; j++)
+				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
+		}
 		nRF24_transmit();
+	}
 		
 	// Update timers
 	last_brcst = xTaskGetTickCount();
@@ -206,6 +213,7 @@ void full_table_dump() {
 // This function checks table for dead entries
 void check_table() {
 	TickType_t current_time = xTaskGetTickCount();
+	int to_remove = -1;
 
 	for(int i = 0; i < table_size_cur; i++) {
 		// If the entry is already dead (odd sequence number), leave it alone
@@ -215,9 +223,17 @@ void check_table() {
 			routing_table[i].modified = true;
 		}
 
-		// TODO: If the entry has been dead for a while, stage it for removal
+		// If the entry has been dead for a while, stage it for removal
+		// This is done naively by storing the index; only one row is removed per function call
 		if(current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(ENTRY_DELETE * 1000))
-			continue;
+			to_remove = i;
+	}
+
+	// Remove row if dead for long time
+	if(to_remove != -1) {
+		for(int i = to_remove; i < table_size_cur - 1; i++)
+			routing_table[i] = routing_table[i+1];
+		table_size_cur--;
 	}
 }
 
