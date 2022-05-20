@@ -86,9 +86,9 @@
 %	TITLE PAGE
 %----------------------------------------------------------------------------------------
 
-\title[Naslov na kratko]{Naslov predstavitve} % The short title appears at the bottom of every slide, the full title is only on the title page
+\title[DSDV \& nRF24L01]{Usmerjanje prometa nRF24L01 s protokolom DSDV} % The short title appears at the bottom of every slide, the full title is only on the title page
 
-\author[Bartol, Rajh]{Tomaž Bartol, Mihael Rajh} % Your name
+\author[Mihael Rajh]{Mihael Rajh} % Your name
 \institute[BSO projekti 21/22] % Your institution as it will appear on the bottom of every slide, may be shorthand to save space
 {
 Fakulteta za računalništvo in informatiko, Univerza v Ljubljani \\ % Your institution for the title page
@@ -114,19 +114,81 @@ Fakulteta za računalništvo in informatiko, Univerza v Ljubljani \\ % Your inst
 \begin{frame}
 \frametitle{Uvod}
 \begin{itemize}
-\item Za seminarsko sva se odločila ker...
+\item MANET kot možna implementacija WSNET
+\item Primerjava MANET in WSNET
+\item Tipične težave v MANET omrežjih
 \end{itemize}
 \end{frame}
 
 \begin{frame}
-\frametitle{Vsebina}
+\frametitle{Usmerjevalni algoritmi}
+\begin{itemize}
+\item Spremljanje stanja povezav ali vektorjev razdalj
+\item Na osnovi tabele ali zahteve
+\item Protokol DSDV kot nadgradnja DBF algoritma
+\item Sekvenčne številke rešujejo nekatere težave omrežij
+\end{itemize}
 \end{frame}
-
-
 
 \begin{frame}
-\frametitle{Zaključki}
+\frametitle{Modul nRF24L01}
+\begin{itemize}
+\item Namenjen komunikaciji na kratke razdalje
+\item Uporablja 126 kanalov na področju 2,4GHz
+\item Komunicira z do 6 napravami hkrati
+\item Paketi vsebujejo do 32B podatkov in 3-5B dolge naslove
+\end{itemize}
 \end{frame}
+
+\begin{frame}
+\frametitle{Rešitev: Format podatkov}
+\begin{itemize}
+\item Dve 32B polji za komunikacijo
+\item Posodobitvena tabela z naslovom cilja, naslovom skoka, številom skokov in sekvečno številko
+\item Usmerjevalna tabela z oznako spremembe in časom zadnjega prejema
+\item Paket 32B = 4x (3B naslov + 4B sekvenca + 1B skoki)
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Rešitev: Implementirana opravila}
+\begin{itemize}
+\item DSDV\_init pripravi napravo in modul na delovanje.
+\item nRF24\_listen preverja za prispela sporočila.
+\item parse\_packet prispela sporočila pravilno prebere.
+\item check\_table preverja tabelo za neveljavne vnose.
+\item update\_table posodobi usmerjevalno tabelo.
+\item format\_packet pripravi spremenjene vrstice za pošiljanje.
+\item full\_table\_dump pošlje celotno usmerjevalno tabelo.
+\item nRF24\_transmit odda en paket.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Rešitev: Uporabniške nastavitve}
+\begin{itemize}
+\item channel
+\item network\_address
+\item TABLE\_SIZE\_INIT
+\item BRCST\_INTERVAL
+\item DUMP\_INTERVAL
+\item CHECK\_INTERVAL
+\item TIMEOUT
+\item ENTRY\_DELETE
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Zaključek}
+\begin{itemize}
+\item Problematika MANET kot rešitev WSNET.
+\item Predstavljen algoritem DSDV in implementacija za modul nRF24L01.
+\item Manjka določanje unikatnega naslova in funkcionalnost protokola.
+\item Lahko drugače formatiramo pakete z upoštevanjem overflow sekvenc.
+\item Možno zavarovanje protokola in optimizacija delovanja.
+\end{itemize}
+\end{frame}
+
 
 \begin{frame}
 \Huge{\centerline{END.}}
