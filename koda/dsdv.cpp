@@ -2,6 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "espressif/esp_common.h"
+#include "FreeRTOS.h"
+#include "esp/uart.h"
+#include "task.h"
+#include "RF24/nRF24L01.h"
+#include "RF24/RF24.h"
 
 /*
 ** USER CONFIGURATION
@@ -109,13 +115,67 @@ int addr_index(uint8_t* addr) {
 	return addr_ind;
 }
 
+// Send nRF24 packet
+void nRF24_transmit(void *pvParameters) {
+	radio.stopListening();
+	radio.write(&dataSend, sizeof(dataSend));
+	radio.startListening();
+}
+
 
 /*
 ** MAIN DSDV FUNCTIONS
 */
 
+// This function dumps entire table
+void full_table_dump(void *pvParameters) {
+	// Write own information in first row (for all packets)
+	for(int j = 0; j < ADDR_LEN; j++)
+		dataSend[j] = routing_table[0].destination[j];
+	for(int j = 0; j < SQNC_LEN; j++)
+		dataSend[ADDR_LEN + j] = (uint8_t) (routing_table[0].sequence_number >> 8*j) & 0xFF;
+	dataSend[ADDR_LEN + SQNC_LEN] = routing_table[0].hops;
+
+	int row = 1;
+	for(int i = 1; i < table_size_cur; i++) {
+		// The first 3 bytes contain routing destination
+		for(int j = 0; j < ADDR_LEN; j++)
+			dataSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
+		// The 4 bytes after contain the sequence number
+		for(int j = 0; j < SQNC_LEN; j++)
+			dataSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
+		// The last byte in row contains number of hops
+		dataSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
+		routing_table[i].modified = false;
+
+		row++;
+		if(row == ROWS_PER_MSG) {
+			nRF24_transmit(NULL);
+			row = 1;
+		}
+	}
+
+	// Send rest of data (if any)
+	if(row > 1) {
+		// Insert dummy rows with network address for unused space
+		for(int i = row; i < ROWS_PER_MSG; i++) {
+			for(int j = 0; j < ADDR_LEN; j++)
+				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
+		}
+		nRF24_transmit(NULL);
+	}
+		
+	// Update timers
+	last_brcst = xTaskGetTickCount();
+	last_dump = xTaskGetTickCount();
+
+	// Update own entry
+	routing_table[0].sequence_number += 2;
+	routing_table[0].last_rcvd = last_brcst;
+}
+
 // This function prepares data for incremental table update and schedules transmission
-void format_packet() {
+void format_packet(void *pvParameters) {
 	// Check number of rows to send
 	int updated_rows = 0;
 	for(int i = 0; i < table_size_cur; i++) {
@@ -123,6 +183,7 @@ void format_packet() {
 			updated_rows++;
 	}
 
+	TickType_t current_time = xTaskGetTickCount();
 	// If updates cannot be sent in a single message, or enough time has passed, dump entire table
 	if(updated_rows > ROWS_PER_MSG || current_time - last_dump > pdMS_TO_TICKS(DUMP_INTERVAL * 1000))
 		xTaskCreate(full_table_dump, "table_dump", 1024, NULL, 7, NULL);
@@ -163,55 +224,8 @@ void format_packet() {
 	}
 }
 
-// This function dumps entire table
-void full_table_dump() {
-	// Write own information in first row (for all packets)
-	for(int j = 0; j < ADDR_LEN; j++)
-		dataSend[j] = routing_table[0].destination[j];
-	for(int j = 0; j < SQNC_LEN; j++)
-		dataSend[ADDR_LEN + j] = (uint8_t) (routing_table[0].sequence_number >> 8*j) & 0xFF;
-	dataSend[ADDR_LEN + SQNC_LEN] = routing_table[0].hops;
-
-	int row = 1;
-	for(int i = 1; i < table_size_cur; i++) {
-		// The first 3 bytes contain routing destination
-		for(int j = 0; j < ADDR_LEN; j++)
-			dataSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
-		// The 4 bytes after contain the sequence number
-		for(int j = 0; j < SQNC_LEN; j++)
-			dataSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
-		// The last byte in row contains number of hops
-		dataSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
-		routing_table[i].modified = false;
-
-		row++;
-		if(row == ROWS_PER_MSG) {
-			nRF24_transmit();
-			row = 1;
-		}
-	}
-
-	// Send rest of data (if any)
-	if(row > 1) {
-		// Insert dummy rows with network address for unused space
-		for(int i = row; i < ROWS_PER_MSG; i++) {
-			for(int j = 0; j < ADDR_LEN; j++)
-				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
-		}
-		nRF24_transmit();
-	}
-		
-	// Update timers
-	last_brcst = xTaskGetTickCount();
-	last_dump = xTaskGetTickCount();
-
-	// Update own entry
-	routing_table[0].sequence_number += 2;
-	routing_table[0].last_rcvd = last_brcst;
-}
-
 // This function checks table for dead entries
-void check_table() {
+void check_table(void *pvParameters) {
 	TickType_t current_time = xTaskGetTickCount();
 	int to_remove = -1;
 
@@ -237,39 +251,8 @@ void check_table() {
 	}
 }
 
-// This function reads incoming packets
-void parse_packet() {
-	// The packet contains 4 entries of 8 bytes, the first being the sender
-	for(int i = 0; i < ROWS_PER_MSG; i++) {
-		
-		// The first 3 bytes of each row entry contain routing destination
-		for(int j = 0; j < ADDR_LEN; j++)
-			update_data[i].destination[j] = dataRecv[i*MSG_ROW_LEN + j];
-		
-		// If the address is equal to network address, discard it
-		if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
-			continue;
-
-		// Otherwise, copy rest of data
-		// The first 3 bytes of first row contain senders address
-		for(int j = 0; j < ADDR_LEN; j++)
-			update_data[i].source[j] = dataRecv[j];
-		
-		// The 4 bytes after destination contain the sequence number
-		update_data[i].sequence_number = 0;
-		for(int j = 0; j < SQNC_LEN; j++)
-			update_data[i].sequence_number |= (((uint32_t) dataRecv[i*MSG_ROW_LEN + ADDR_LEN + j]) << 8*j);
-
-		// The last byte in row contains number of hops
-		update_data[i].hops = dataRecv[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN];
-	}
-
-	// Schedule task to update table info
-	xTaskCreate(update_table, "update_table", 1024, NULL, 5, NULL);
-}
-
 // This function updates table based on received data
-void update_table() {
+void update_table(void *pvParameters) {
 	for(int i = 0; i < ROWS_PER_MSG; i++) {
 		// If the address is equal to network address, discard it
 		if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
@@ -321,20 +304,45 @@ void update_table() {
 	}
 }
 
+// This function reads incoming packets
+void parse_packet(void *pvParameters) {
+	// The packet contains 4 entries of 8 bytes, the first being the sender
+	for(int i = 0; i < ROWS_PER_MSG; i++) {
+		
+		// The first 3 bytes of each row entry contain routing destination
+		for(int j = 0; j < ADDR_LEN; j++)
+			update_data[i].destination[j] = dataRecv[i*MSG_ROW_LEN + j];
+		
+		// If the address is equal to network address, discard it
+		if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
+			continue;
 
-/*
-** nRF24 MODULE COMMUNICATION AND INITIALIZATION
-*/
+		// Otherwise, copy rest of data
+		// The first 3 bytes of first row contain senders address
+		for(int j = 0; j < ADDR_LEN; j++)
+			update_data[i].source[j] = dataRecv[j];
+		
+		// The 4 bytes after destination contain the sequence number
+		update_data[i].sequence_number = 0;
+		for(int j = 0; j < SQNC_LEN; j++)
+			update_data[i].sequence_number |= (((uint32_t) dataRecv[i*MSG_ROW_LEN + ADDR_LEN + j]) << 8*j);
 
-// Send packet
-void nRF24_transmit() {
-	radio.stopListening();
-	bool ackn = radio.write(&dataSend, sizeof(dataSend));
-	radio.startListening();
+		// The last byte in row contains number of hops
+		update_data[i].hops = dataRecv[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN];
+	}
+
+	// Schedule task to update table info
+	xTaskCreate(update_table, "update_table", 1024, NULL, 5, NULL);
 }
 
+
+/*
+** nRF24 RADIO LOOP AND INITIALIZATION
+*/
+
+
 // Listen for packets
-void nRF24_listen() {
+void nRF24_listen(void *pvParameters) {
 	while (1) {
 		if (radio.available()) {
 			radio.read(&dataRecv, sizeof(dataRecv));
@@ -356,7 +364,7 @@ void nRF24_listen() {
 	}
 }
 
-void DSDV_init() {
+void DSDV_init(void *pvParameters) {
 	uart_set_baud(0, 115200);
 	gpio_enable(SCL, GPIO_OUTPUT);
 	gpio_enable(CS_NRF, GPIO_OUTPUT);
