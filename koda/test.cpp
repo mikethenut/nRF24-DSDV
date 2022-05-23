@@ -1,14 +1,18 @@
 #include "dsdv.h"
 
-// Prints table every so often
-void nRF24_transmit(void *pvParameters) {
+#define PRINT_INTERVAL	10
+
+
+// Prints table every 2s
+void table_print_loop(void *pvParameters) {
     while (1) {
-        xTaskCreate(print_table, "print_table", 1024, NULL, 6, NULL);
-		vTaskDelay(pdMS_TO_TICKS(2000));
+        print_table();
+	    vTaskDelay(pdMS_TO_TICKS(PRINT_INTERVAL * 1000));
     }
 }
 
 extern "C" void user_init(void) {
-	xTaskCreate(DSDV_init, "DSDV_init", 1024, NULL, 1, NULL);
-    xTaskCreate(nRF24_transmit, "nRF24_transmit", 1024, NULL, 1, NULL);
+    DSDV_init();
+	xTaskCreate(table_print_loop, "tbl_prnt_loop", 1024, NULL, 2, NULL);
 }
+

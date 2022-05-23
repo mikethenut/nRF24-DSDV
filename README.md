@@ -21,3 +21,6 @@ Navodila (Tema 14): Izdelajte graf sosedov in usmerjevalni algoritem za prenos p
 ## Fixes
 - hop overflow
 - added table print
+- removed incorrect task creation
+- adjusted header formatting
+

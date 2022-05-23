@@ -56,14 +56,42 @@ const uint8_t network_address[] = {0x6E, 0x52, 0x46};
 #define ADDR_LEN		3
 #define SQNC_LEN		4
 
+
+/*
+** DATA STRUCTURES & PUBLIC DATA FIELDS
+*/
+
+struct update_row {
+	uint8_t destination[ADDR_LEN];
+    uint8_t source[ADDR_LEN];
+	uint32_t sequence_number;
+    uint8_t hops;
+};
+
+struct routing_row {
+    uint8_t destination[ADDR_LEN];
+    uint8_t next_hop[ADDR_LEN];
+	uint32_t sequence_number;
+    uint8_t hops;
+	bool modified;
+	TickType_t last_rcvd;
+};
+
+extern update_row* update_data;
+extern routing_row* routing_table;
+extern uint8_t* dataRecv;
+extern uint8_t* dataSend;
+
+
 /*
 ** EXPOSED FUNCTIONS
 */
 
 // Prints full routing table to stdout
-void print_table(void *pvParameters);
+void print_table();
 
 // Initializes device and network for DSDV protocol
-void DSDV_init(void *pvParameters);
+void DSDV_init();
 
 #endif
+

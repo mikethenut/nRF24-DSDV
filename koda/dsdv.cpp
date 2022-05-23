@@ -1,37 +1,20 @@
 #include "dsdv.h"
 
-
 /*
-** DATA STRUCTURES
+** DATA FIELDS
 */
 
-struct routing_row {
-    uint8_t destination[ADDR_LEN];
-    uint8_t next_hop[ADDR_LEN];
-	uint32_t sequence_number;
-    uint8_t hops;
-	bool modified;
-	TickType_t last_rcvd;
-};
-
-struct update_row {
-	uint8_t destination[ADDR_LEN];
-    uint8_t source[ADDR_LEN];
-	uint32_t sequence_number;
-    uint8_t hops;
-};
-
-routing_row* routing_table;
 update_row* update_data;
+routing_row* routing_table;
+
+uint8_t* dataRecv;
+uint8_t*  dataSend;
 
 uint8_t table_size_max;
 uint8_t table_size_cur;
 
 uint8_t device_address[ADDR_LEN];
 static RF24 radio(CE_NRF, CS_NRF);
-
-uint8_t dataRecv[MSG_LEN];
-uint8_t dataSend[MSG_LEN];
 
 TickType_t last_rcvd;
 TickType_t last_brcst;
@@ -64,27 +47,30 @@ int addr_index(uint8_t* addr) {
 
 
 // Prints full routing table to stdout
-void print_table(void *pvParameters) {
+void print_table() {
 	TickType_t current_time = xTaskGetTickCount();
+	printf("-------------------------------------------------\n");
+	printf(" DEST  | NXTHOP | LEN | SEQUENCE | MOD | TIME (s)\n");
 	for(int i = 0; i < table_size_cur; i++) {
 		for (int j = 0; j < ADDR_LEN; j++)
 			printf("%02X", routing_table[i].destination[j]);
 		printf(" | ");
 		for (int j = 0; j < ADDR_LEN; j++)
 			printf("%02X", routing_table[i].next_hop[j]);
-		printf(" | %d | ", routing_table[i].hops);
+		printf(" |  %d  | ", routing_table[i].hops);
 		for (int j = 0; j < SQNC_LEN; j++)
 			printf("%02X", (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF);
 		if(routing_table[i].modified)
-			printf(" | M | ");
+			printf(" |  X  | ");
 		else
-			printf(" |   | ");
-		printf("%d\n", ((current_time - routing_table[i].last_rcvd) * 1000) / configTICKRATEHZ);
+			printf(" |     | ");
+		printf("%d\n", (current_time - routing_table[i].last_rcvd) / configTICK_RATE_HZ);
 	}
+	printf("-------------------------------------------------\n");
 }
 
 // Sends nRF24 packet
-void nRF24_transmit(void *pvParameters) {
+void nRF24_transmit() {
 	radio.stopListening();
 	radio.write(&dataSend, sizeof(dataSend));
 	radio.startListening();
@@ -96,7 +82,7 @@ void nRF24_transmit(void *pvParameters) {
 */
 
 // This function dumps entire table into network
-void full_table_dump(void *pvParameters) {
+void full_table_dump() {
 	// Write own information in first row (for all packets)
 	for(int j = 0; j < ADDR_LEN; j++)
 		dataSend[j] = routing_table[0].destination[j];
@@ -118,7 +104,7 @@ void full_table_dump(void *pvParameters) {
 
 		row++;
 		if(row == ROWS_PER_MSG) {
-			nRF24_transmit(NULL);
+			nRF24_transmit();
 			row = 1;
 		}
 	}
@@ -130,7 +116,7 @@ void full_table_dump(void *pvParameters) {
 			for(int j = 0; j < ADDR_LEN; j++)
 				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
 		}
-		nRF24_transmit(NULL);
+		nRF24_transmit();
 	}
 		
 	// Update timers
@@ -143,7 +129,7 @@ void full_table_dump(void *pvParameters) {
 }
 
 // This function prepares data for incremental table update and schedules transmission
-void format_packet(void *pvParameters) {
+void format_packet() {
 	// Check number of rows to send
 	int updated_rows = 0;
 	for(int i = 0; i < table_size_cur; i++) {
@@ -154,7 +140,7 @@ void format_packet(void *pvParameters) {
 	TickType_t current_time = xTaskGetTickCount();
 	// If updates cannot be sent in a single message, or enough time has passed, dump entire table
 	if(updated_rows > ROWS_PER_MSG || current_time - last_dump > pdMS_TO_TICKS(DUMP_INTERVAL * 1000))
-		xTaskCreate(full_table_dump, "table_dump", 1024, NULL, 7, NULL);
+		full_table_dump();
 
 	else {
 		// Otherwise write rows into packet
@@ -183,7 +169,7 @@ void format_packet(void *pvParameters) {
 		}
 
 		// Send packet
-		xTaskCreate(nRF24_transmit, "nRF24_transmit", 1024, NULL, 8, NULL);
+		nRF24_transmit();
 		last_brcst = xTaskGetTickCount();
 
 		// Update own entry
@@ -193,11 +179,11 @@ void format_packet(void *pvParameters) {
 }
 
 // This function checks table for dead entries
-void check_table(void *pvParameters) {
+void check_table() {
 	TickType_t current_time = xTaskGetTickCount();
 	int to_remove = -1;
 
-	for(int i = 0; i < table_size_cur; i++) {
+	for(int i = 1; i < table_size_cur; i++) {
 		// If the entry is already dead (odd sequence number), leave it alone
 		if(routing_table[i].sequence_number % 2 != 1 && current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(TIMEOUT * 1000)) {
 			routing_table[i].sequence_number++;
@@ -219,8 +205,8 @@ void check_table(void *pvParameters) {
 	}
 }
 
-// This function updates table based on received data
-void update_table(void *pvParameters) {
+// This function updates routing table based on data in update table
+void update_table() {
 	for(int i = 0; i < ROWS_PER_MSG; i++) {
 		// If the address is equal to network address, discard it
 		if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
@@ -272,8 +258,8 @@ void update_table(void *pvParameters) {
 	}
 }
 
-// This function reads incoming packets
-void parse_packet(void *pvParameters) {
+// This function reads incoming packets into update table
+void parse_packet() {
 	// The packet contains 4 entries of 8 bytes, the first being the sender
 	for(int i = 0; i < ROWS_PER_MSG; i++) {
 		
@@ -301,8 +287,8 @@ void parse_packet(void *pvParameters) {
 			update_data[i].hops += 1;
 	}
 
-	// Schedule task to update table info
-	xTaskCreate(update_table, "update_table", 1024, NULL, 5, NULL);
+	// Update table info
+	update_table();
 }
 
 
@@ -317,15 +303,15 @@ void nRF24_listen(void *pvParameters) {
 		if (radio.available()) {
 			radio.read(&dataRecv, sizeof(dataRecv));
 			last_rcvd = xTaskGetTickCount();
-			xTaskCreate(parse_packet, "parse_packet", 1024, NULL, 3, NULL);
+			parse_packet();
 		}
 
 		// Check if it is time to check table or broadcast info
 		TickType_t current_time = xTaskGetTickCount();
 		if(current_time - last_brcst > pdMS_TO_TICKS(CHECK_INTERVAL * 1000))
-			xTaskCreate(check_table, "check_table", 1024, NULL, 4, NULL);
+			check_table();
 		if(current_time - last_brcst > pdMS_TO_TICKS(BRCST_INTERVAL * 1000))
-			xTaskCreate(format_packet, "format_packet", 1024, NULL, 6, NULL);
+			format_packet();
 
 		// Sleep for 200 ms
 		radio.powerDown();
@@ -335,7 +321,7 @@ void nRF24_listen(void *pvParameters) {
 }
 
 // Initializes device and network for DSDV protocol
-void DSDV_init(void *pvParameters) {
+void DSDV_init() {
 	uart_set_baud(0, 115200);
 	gpio_enable(SCL, GPIO_OUTPUT);
 	gpio_enable(CS_NRF, GPIO_OUTPUT);
@@ -349,9 +335,13 @@ void DSDV_init(void *pvParameters) {
 	last_brcst = xTaskGetTickCount();
 	last_dump = xTaskGetTickCount();
 
-	// Initialize data tables
+	// Initialize data fields & tables
+	dataRecv = new uint8_t[MSG_LEN];
+	dataSend = new uint8_t[MSG_LEN];
+
 	table_size_max = TABLE_SIZE_INIT;
 	table_size_cur = 1;
+
 	routing_table = (routing_row*) malloc(table_size_max * sizeof(routing_row));
 	update_data = (update_row*) malloc(ROWS_PER_MSG * sizeof(update_row));
 
@@ -360,6 +350,7 @@ void DSDV_init(void *pvParameters) {
 		routing_table[0].destination[i] = device_address[i];
 		routing_table[0].next_hop[i] = device_address[i];
 	}
+
 	routing_table[0].hops = 0;
 	routing_table[0].sequence_number = 0;
 	routing_table[0].modified = true;
@@ -377,3 +368,4 @@ void DSDV_init(void *pvParameters) {
 	// Start listening for incoming packets and broadcast timers
 	xTaskCreate(nRF24_listen, "nRF24_listen", 1024, NULL, 2, NULL);
 }
+
