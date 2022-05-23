@@ -13,3 +13,11 @@ Navodila (Tema 14): Izdelajte graf sosedov in usmerjevalni algoritem za prenos p
 ## Dokumentacija
 
 - https://nrf24.github.io/RF24/index.html
+
+## Similar projects
+- https://github.com/joshua-jerred/DSDV
+- https://github.com/lukeflima/DSDV
+
+## Fixes
+- hop overflow
+- added table print

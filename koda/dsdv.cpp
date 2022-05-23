@@ -1,57 +1,4 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include "espressif/esp_common.h"
-#include "FreeRTOS.h"
-#include "esp/uart.h"
-#include "task.h"
-#include "RF24/nRF24L01.h"
-#include "RF24/RF24.h"
-
-/*
-** USER CONFIGURATION
-*/
-
-// Network channel and address (used to communicate with any on-line device)
-const uint8_t channel = 78;
-const uint8_t network_address[] = {0x6E, 0x52, 0x46};
-
-// Determines how many destinations can be stored in routing table at initialization
-// The table size is doubled when full and new destination is to be added
-#define TABLE_SIZE_INIT	4
-
-// Determines how often incremental changes should be broadcast (in sec)
-#define BRCST_INTERVAL	5
-
-// Determines how often full table dump should be broadcast (in sec)
-#define DUMP_INTERVAL	60
-
-// Determines how often table should be checked for dead entries (in sec)
-#define CHECK_INTERVAL	60
-
-// Determines when an entry is considered dead after no communication (in sec)
-#define TIMEOUT			180
-
-// Determines when an entry is deleted after no communication (in sec)
-#define ENTRY_DELETE	300
-
-
-/*
-** NETWORK CONFIGURATION
-*/
-
-// device configuration
-#define SCL 			14
-#define CE_NRF			3
-#define CS_NRF			0
-
-// packet configuration
-#define MSG_LEN			32
-#define ROWS_PER_MSG	4
-#define MSG_ROW_LEN		8
-#define ADDR_LEN		3
-#define SQNC_LEN		4
+#include "dsdv.h"
 
 
 /*
@@ -115,7 +62,28 @@ int addr_index(uint8_t* addr) {
 	return addr_ind;
 }
 
-// Send nRF24 packet
+
+// Prints full routing table to stdout
+void print_table(void *pvParameters) {
+	TickType_t current_time = xTaskGetTickCount();
+	for(int i = 0; i < table_size_cur; i++) {
+		for (int j = 0; j < ADDR_LEN; j++)
+			printf("%02X", routing_table[i].destination[j]);
+		printf(" | ");
+		for (int j = 0; j < ADDR_LEN; j++)
+			printf("%02X", routing_table[i].next_hop[j]);
+		printf(" | %d | ", routing_table[i].hops);
+		for (int j = 0; j < SQNC_LEN; j++)
+			printf("%02X", (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF);
+		if(routing_table[i].modified)
+			printf(" | M | ");
+		else
+			printf(" |   | ");
+		printf("%d\n", ((current_time - routing_table[i].last_rcvd) * 1000) / configTICKRATEHZ);
+	}
+}
+
+// Sends nRF24 packet
 void nRF24_transmit(void *pvParameters) {
 	radio.stopListening();
 	radio.write(&dataSend, sizeof(dataSend));
@@ -127,7 +95,7 @@ void nRF24_transmit(void *pvParameters) {
 ** MAIN DSDV FUNCTIONS
 */
 
-// This function dumps entire table
+// This function dumps entire table into network
 void full_table_dump(void *pvParameters) {
 	// Write own information in first row (for all packets)
 	for(int j = 0; j < ADDR_LEN; j++)
@@ -272,7 +240,7 @@ void update_table(void *pvParameters) {
 				routing_table[table_size_cur].destination[j] = update_data[i].destination[j];
 			for(int j = 0; j < ADDR_LEN; j++)
 				routing_table[table_size_cur].next_hop[j] = update_data[i].source[j];
-			routing_table[table_size_cur].hops = update_data[i].hops + 1;
+			routing_table[table_size_cur].hops = update_data[i].hops;
 			routing_table[table_size_cur].sequence_number = update_data[i].sequence_number;
 			routing_table[table_size_cur].modified = true;
 			routing_table[table_size_cur].last_rcvd = last_rcvd;
@@ -288,8 +256,8 @@ void update_table(void *pvParameters) {
 				routing_table[addr_ind].sequence_number = update_data[i].sequence_number;
 				routing_table[addr_ind].last_rcvd = last_rcvd;
 
-				if(routing_table[addr_ind].hops != update_data[i].hops + 1) {
-					routing_table[addr_ind].hops = update_data[i].hops + 1;
+				if(routing_table[addr_ind].hops != update_data[i].hops) {
+					routing_table[addr_ind].hops = update_data[i].hops;
 					routing_table[addr_ind].modified = true;
 				}
 
@@ -329,6 +297,8 @@ void parse_packet(void *pvParameters) {
 
 		// The last byte in row contains number of hops
 		update_data[i].hops = dataRecv[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN];
+		if(update_data[i].hops < 255)
+			update_data[i].hops += 1;
 	}
 
 	// Schedule task to update table info
@@ -364,6 +334,7 @@ void nRF24_listen(void *pvParameters) {
 	}
 }
 
+// Initializes device and network for DSDV protocol
 void DSDV_init(void *pvParameters) {
 	uart_set_baud(0, 115200);
 	gpio_enable(SCL, GPIO_OUTPUT);
@@ -405,9 +376,4 @@ void DSDV_init(void *pvParameters) {
 
 	// Start listening for incoming packets and broadcast timers
 	xTaskCreate(nRF24_listen, "nRF24_listen", 1024, NULL, 2, NULL);
-}
-
-
-extern "C" void user_init(void) {
-	xTaskCreate(DSDV_init, "DSDV_init", 1024, NULL, 1, NULL);
 }
