@@ -96,7 +96,7 @@ extern uint8_t* dsdvSend;
 
 // Data field for packets addressed to this device and length of packet
 extern uint8_t* dataRecv;
-extern int dataLen
+extern int dataLen;
 
 // Semaphor activated when device receives packed addressed to it
 extern SemaphoreHandle_t semphr_trgt_packet;

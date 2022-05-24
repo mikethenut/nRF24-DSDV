@@ -5,7 +5,6 @@ Navodila (Tema 14): Izdelajte graf sosedov in usmerjevalni algoritem za prenos p
 ## TO-DO
 
 - priprava testnega programa za preverjanje pravilnosti delovanja
-- pravilno določanje lokalnega naslova
 - dopolnitev GitHub repo z opisom strukture projekta
 
 ## Dokumentacija

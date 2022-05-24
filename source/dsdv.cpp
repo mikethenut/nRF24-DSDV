@@ -15,7 +15,7 @@ uint8_t* forwardSend;
 
 // Data field for packets addressed to this device and length of packet
 uint8_t* dataRecv;
-int dataLen
+int dataLen;
 
 uint8_t table_size_max;
 uint8_t table_size_cur;
@@ -467,7 +467,7 @@ void nRF24_listen(void *pvParameters) {
 				xSemaphoreGive(semphr_dsdv_packet);
 			} else {
 				radio.read(&forwardRecv, MSG_LEN);
-				parse_forward();
+				parse_data();
 			}
 		}
 
