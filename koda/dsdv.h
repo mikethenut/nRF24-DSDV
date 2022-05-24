@@ -5,32 +5,44 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "FreeRTOSConfig.h"
 #include "espressif/esp_common.h"
 #include "FreeRTOS.h"
+#include "i2c/i2c.h"
 #include "esp/uart.h"
 #include "task.h"
+#include "timers.h"
+#include "semphr.h"
 #include "RF24/nRF24L01.h"
 #include "RF24/RF24.h"
 
 /*
 ** USER CONFIGURATION
+** CHANGE AS YOU LIKE
 */
 
-// Network channel and address (used to communicate with any on-line device)
+// Network channel and address (used to communicate with any active device)
 const uint8_t channel = 78;
 const uint8_t network_address[] = {0x6E, 0x52, 0x46};
+
+// If enabled, application prints every packet received/sent; can be reconfigured dynamically
+extern bool print_incoming_packet;
+extern bool print_outgoing_packet;
+
+//If enabled, application prints every core function invocation; can be reconfigured dynamically
+extern bool verbose;
 
 // Determines how many destinations can be stored in routing table at initialization
 // The table size is doubled when full and new destination is to be added
 #define TABLE_SIZE_INIT	4
 
 // Determines how often incremental changes should be broadcast (in sec)
-#define BRCST_INTERVAL	5
+#define BRCST_INTERVAL	16
 
-// Determines how often full table dump should be broadcast (in sec)
+// Determines how often full table dump should be broadcast (in sec, should be multiple of BRCST_INTERVAL)
 #define DUMP_INTERVAL	60
 
-// Determines how often table should be checked for dead entries (in sec)
+// Determines how often table should be checked for dead entries (in sec, should be multiple of BRCST_INTERVAL)
 #define CHECK_INTERVAL	60
 
 // Determines when an entry is considered dead after no communication (in sec)
@@ -42,6 +54,7 @@ const uint8_t network_address[] = {0x6E, 0x52, 0x46};
 
 /*
 ** NETWORK CONFIGURATION
+** ONLY CHANGE IF NECESSARY
 */
 
 // device configuration
@@ -76,22 +89,50 @@ struct routing_row {
 	bool modified;
 	TickType_t last_rcvd;
 };
-
-extern update_row* update_data;
-extern routing_row* routing_table;
+ 
+// Data field for received packet (32bit)
 extern uint8_t* dataRecv;
+// Data field for packet to be sent (32bit)
 extern uint8_t* dataSend;
+
+// Contains data parsed from received packet (get_utable_size() entries)
+extern update_row* update_data;
+// Contains current routing data for device (get_rtable_size() entries)
+extern routing_row* routing_table;
+
+// Semaphor for triggering parsing of dataRecv (incoming network data)
+extern SemaphoreHandle_t semphr_rcvd_packet;
 
 
 /*
 ** EXPOSED FUNCTIONS
 */
 
+// Initializes device and network for DSDV protocol
+// Expects device address as byte array of size ADDR_LEN
+void DSDV_init(uint8_t* local_address);
+
+// Forwards data packet according to routing table
+// Returns false if data too large or destination not found
+bool forward_data(uint8_t* data, int len, uint8_t* destination);
+
+// Returns address of network (for broadcasts)
+const uint8_t* get_network_address();
+
+// Returns address of this device
+uint8_t* get_device_address();
+
+// Returns size of routing table
+uint8_t get_rtable_size();
+
+// Returns size of update table (ROWS_PER_MSG)
+uint8_t get_utable_size();
+
 // Prints full routing table to stdout
 void print_table();
 
-// Initializes device and network for DSDV protocol
-void DSDV_init();
+// Prints len bytes to stdout as hex
+void print_bytes(uint8_t* data, int len);
 
 #endif
 
