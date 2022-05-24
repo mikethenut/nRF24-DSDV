@@ -8,7 +8,6 @@
 #include "FreeRTOSConfig.h"
 #include "espressif/esp_common.h"
 #include "FreeRTOS.h"
-#include "i2c/i2c.h"
 #include "esp/uart.h"
 #include "task.h"
 #include "timers.h"
