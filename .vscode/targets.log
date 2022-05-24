@@ -7,9 +7,8 @@ make: *** No rule to make target 'all'.  Stop.
 # License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
- 
 
-# Make data base, printed on Fri May 20 12:40:05 2022
+# Make data base, printed on Tue May 24 15:14:53 2022
 
 # Variables
 
@@ -62,7 +61,7 @@ PROGRAMW6432 = C:\Program Files
 # environment
 PROGRAMDATA = C:\ProgramData
 # environment
-VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-ff1446e6-3e64-430e-8b19-9ed96b69b30b-sock
+VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-3d4f979b-ffa7-4045-8579-52c8182f82ab-sock
 # environment
 VSCODE_CWD = C:\Users\mihae\AppData\Local\Programs\Microsoft VS Code
 # default
@@ -98,7 +97,7 @@ NVTOOLSEXT_PATH = C:\Program Files\NVIDIA Corporation\NvToolsExt\
 # automatic
 %F = $(notdir $%)
 # environment
-CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_18212_PFGJOCSDLTASKHGE
+CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_9492_NXHORJAUFZMTSZEP
 # environment
 VSCODE_PIPE_LOGGING = true
 # environment
@@ -218,7 +217,7 @@ TERM = cygwin
 # environment
 FPS_BROWSER_APP_PROFILE_STRING = Internet Explorer
 # environment
-VSCODE_PID = 18212
+VSCODE_PID = 9492
 # environment
 USERDOMAIN_ROAMINGPROFILE = LAPTOP-VK195BBA
 # variable set hash-table stats:
@@ -288,6 +287,6 @@ GNUmakefile:
 # strcache performance: lookups = 19 / hit rate = 15%
 # hash-table stats:
 # Load=16/8192=0%, Rehash=0, Collisions=1/19=5%
-# Finished Make data base on Fri May 20 12:40:05 2022
+# Finished Make data base on Tue May 24 15:14:53 2022
 
  

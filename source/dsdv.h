@@ -90,18 +90,25 @@ struct routing_row {
 	TickType_t last_rcvd;
 };
  
-// Data field for received packet (32bit)
+// Data field for received DSDV packet (32bit)
+extern uint8_t* dsdvRecv;
+// Data field for DSDV packet to be sent (32bit)
+extern uint8_t* dsdvSend;
+
+// Data field for packets addressed to this device and length of packet
 extern uint8_t* dataRecv;
-// Data field for packet to be sent (32bit)
-extern uint8_t* dataSend;
+extern int dataLen
+
+// Semaphor activated when device receives packed addressed to it
+extern SemaphoreHandle_t semphr_trgt_packet;
+
+// Semaphor for triggering parsing of dsdvRecv (incoming protocol data)
+extern SemaphoreHandle_t semphr_dsdv_packet;
 
 // Contains data parsed from received packet (get_utable_size() entries)
 extern update_row* update_data;
 // Contains current routing data for device (get_rtable_size() entries)
 extern routing_row* routing_table;
-
-// Semaphor for triggering parsing of dataRecv (incoming network data)
-extern SemaphoreHandle_t semphr_rcvd_packet;
 
 
 /*
@@ -112,8 +119,8 @@ extern SemaphoreHandle_t semphr_rcvd_packet;
 // Expects device address as byte array of size ADDR_LEN
 void DSDV_init(uint8_t* local_address);
 
-// Forwards data packet according to routing table
-// Returns false if data too large or destination not found
+// Forwards data packet of length len according to routing table to destination
+// Returns false if data too large or destination is not found
 bool forward_data(uint8_t* data, int len, uint8_t* destination);
 
 // Returns address of network (for broadcasts)

@@ -7,11 +7,15 @@
 update_row* update_data;
 routing_row* routing_table;
 
-uint8_t* dataRecv;
-uint8_t* dataSend;
+uint8_t* dsdvRecv;
+uint8_t* dsdvSend;
 
 uint8_t* forwardRecv;
 uint8_t* forwardSend;
+
+// Data field for packets addressed to this device and length of packet
+uint8_t* dataRecv;
+int dataLen
 
 uint8_t table_size_max;
 uint8_t table_size_cur;
@@ -19,7 +23,8 @@ uint8_t table_size_cur;
 uint8_t device_address[ADDR_LEN];
 static RF24 radio(CE_NRF, CS_NRF);
 
-SemaphoreHandle_t semphr_rcvd_packet;
+SemaphoreHandle_t semphr_dsdv_packet;
+SemaphoreHandle_t semphr_trgt_packet;
 
 TickType_t last_rcvd;
 TickType_t last_check;
@@ -69,7 +74,7 @@ void print_table() {
 		printf(" | ");
 		for (int j = 0; j < ADDR_LEN; j++)
 			printf("%02X", routing_table[i].next_hop[j]);
-		printf(" |  %d  | ", routing_table[i].hops);
+		printf(" | %03d | ", routing_table[i].hops);
 		for (int j = SQNC_LEN - 1; j >= 0; j--)
 			printf("%02X", (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF);
 		if(routing_table[i].modified)
@@ -139,8 +144,13 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 
 // Forwards data packet according to routing table
 bool forward_data(uint8_t* data, int len, uint8_t* destination) {
-	if(len + ADDR_LEN + 1 > MSG_LEN)
+	if(len + ADDR_LEN + 1 > MSG_LEN) {
+		printf("forward_data: packet cannot be routed.\n");
 		return false;
+	}
+	
+	if(verbose)
+		printf("forward_data: routing packet according to table.\n");
 
 	int route_ind = addr_index(destination);
 	if(route_ind == -1)
@@ -158,6 +168,37 @@ bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 	}
 }
 
+void parse_data() {
+	if(verbose)
+		printf("parse_data: parse packet addressed to device.\n");
+
+	// Read packet as: destination addr, length, content
+	uint8_t* dest = new uint8_t[ADDR_LEN];
+	for(int i = 0; i < ADDR_LEN; i++)
+		dest[i] = forwardRecv[i];
+	
+	int len = (int) forwardRecv[ADDR_LEN];
+	if(len + ADDR_LEN + 1 > MSG_LEN)
+		len = MSG_LEN - ADDR_LEN - 1;
+
+	uint8_t* data = new uint8_t[len];
+	for(int i = 0; i < len; i++)
+		data[i] = forwardRecv[ADDR_LEN + i + 1];
+	
+	if(equal_addr(dest, device_address)) {
+		// If destination, copy data and trigger semaphore
+		for(int i = 0; i < len; i++)
+			dataRecv[i] = data[i];
+		dataLen = len;
+		
+		xSemaphoreGive(semphr_trgt_packet);
+	} else // Else route onwards
+		forward_data(data, len, dest);
+
+	free(dest);
+	free(data);
+}
+
 // This function dumps entire table into network
 void full_table_dump() {
 	if(verbose)
@@ -165,26 +206,26 @@ void full_table_dump() {
 
 	// Write own information in first row (for all packets)
 	for(int j = 0; j < ADDR_LEN; j++)
-		dataSend[j] = routing_table[0].destination[j];
+		dsdvSend[j] = routing_table[0].destination[j];
 	for(int j = 0; j < SQNC_LEN; j++)
-		dataSend[ADDR_LEN + j] = (uint8_t) (routing_table[0].sequence_number >> 8*j) & 0xFF;
-	dataSend[ADDR_LEN + SQNC_LEN] = routing_table[0].hops;
+		dsdvSend[ADDR_LEN + j] = (uint8_t) (routing_table[0].sequence_number >> 8*j) & 0xFF;
+	dsdvSend[ADDR_LEN + SQNC_LEN] = routing_table[0].hops;
 
 	int row = 1;
 	for(int i = 1; i < table_size_cur; i++) {
 		// The first 3 bytes contain routing destination
 		for(int j = 0; j < ADDR_LEN; j++)
-			dataSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
+			dsdvSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
 		// The 4 bytes after contain the sequence number
 		for(int j = 0; j < SQNC_LEN; j++)
-			dataSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
+			dsdvSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
 		// The last byte in row contains number of hops
-		dataSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
+		dsdvSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
 		routing_table[i].modified = false;
 
 		row++;
 		if(row == ROWS_PER_MSG) {
-			nRF24_transmit(dataSend, MSG_LEN, (uint8_t *) network_address);
+			nRF24_transmit(dsdvSend, MSG_LEN, (uint8_t *) network_address);
 			row = 1;
 		}
 	}
@@ -194,9 +235,9 @@ void full_table_dump() {
 		// Insert dummy rows with network address for unused space
 		for(int i = row; i < ROWS_PER_MSG; i++) {
 			for(int j = 0; j < ADDR_LEN; j++)
-				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
+				dsdvSend[row*MSG_ROW_LEN + j] = network_address[j];
 		}
-		nRF24_transmit(dataSend, MSG_LEN, (uint8_t *) network_address);
+		nRF24_transmit(dsdvSend, MSG_LEN, (uint8_t *) network_address);
 	}
 		
 	// Update timer
@@ -269,14 +310,14 @@ void brcst_route_info(TimerHandle_t xTimer) {
 			if(routing_table[i].modified) {
 				// The first 3 bytes of each row entry contain routing destination
 				for(int j = 0; j < ADDR_LEN; j++)
-					dataSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
+					dsdvSend[row*MSG_ROW_LEN + j] = routing_table[i].destination[j];
 
 				// The 4 bytes after destination contain the sequence number
 				for(int j = 0; j < SQNC_LEN; j++)
-					dataSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
+					dsdvSend[row*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (routing_table[i].sequence_number >> 8*j) & 0xFF;
 
 				// The last byte in row contains number of hops
-				dataSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
+				dsdvSend[row*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = routing_table[i].hops;
 
 				row++;
 			}
@@ -285,11 +326,11 @@ void brcst_route_info(TimerHandle_t xTimer) {
 		// Insert dummy rows with network address for unused space
 		for(int i = row; i < ROWS_PER_MSG; i++) {
 			for(int j = 0; j < ADDR_LEN; j++)
-				dataSend[row*MSG_ROW_LEN + j] = network_address[j];
+				dsdvSend[row*MSG_ROW_LEN + j] = network_address[j];
 		}
 
 		// Send packet
-		nRF24_transmit(dataSend, MSG_LEN, (uint8_t *) network_address);
+		nRF24_transmit(dsdvSend, MSG_LEN, (uint8_t *) network_address);
 
 		// Update own entry
 		routing_table[0].sequence_number += 2;
@@ -332,7 +373,7 @@ void update_table() {
 			// Update row if sequence number is greater or equal with fewer hops
 			if(update_data[i].sequence_number > routing_table[addr_ind].sequence_number ||
 			   		(update_data[i].sequence_number == routing_table[addr_ind].sequence_number && 
-			   		 update_data[i].hops + 1 < routing_table[addr_ind].hops)	) {
+			   		 update_data[i].hops < routing_table[addr_ind].hops)	) {
 				
 				routing_table[addr_ind].sequence_number = update_data[i].sequence_number;
 				routing_table[addr_ind].last_rcvd = last_rcvd;
@@ -353,19 +394,19 @@ void update_table() {
 	}
 }
 
-// This function reads incoming packets into update table
-// Starts processing dataRecv whenever semphr_rcvd_packet is available
-void parse_packet(void *pvParameters) {
+// This function reads incoming DSDV packets into update table
+// Starts processing dsdvRecv whenever semphr_dsdv_packet is available
+void parse_dsdv_packet(void *pvParameters) {
 	if(verbose)
-		printf("parse_packet: parses packet into update table.\n");
+		printf("parse_dsdv_packet: parses packet into update table.\n");
 
 	while (1) {
-		if(xSemaphoreTake(semphr_rcvd_packet, (TickType_t) 10) == pdTRUE) {
+		if(xSemaphoreTake(semphr_dsdv_packet, (TickType_t) 10) == pdTRUE) {
 
 			// If configured, print packet
 			if(print_incoming_packet) {
 				printf("RCVD PACKET: ");
-				print_bytes(dataRecv, MSG_LEN);
+				print_bytes(dsdvRecv, MSG_LEN);
 			}
 
 			// The packet contains 4 entries of 8 bytes, the first being the sender
@@ -373,7 +414,7 @@ void parse_packet(void *pvParameters) {
 		
 				// The first 3 bytes of each row entry contain routing destination
 				for(int j = 0; j < ADDR_LEN; j++)
-					update_data[i].destination[j] = dataRecv[i*MSG_ROW_LEN + j];
+					update_data[i].destination[j] = dsdvRecv[i*MSG_ROW_LEN + j];
 		
 				// If the address is equal to network address, discard it
 				if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
@@ -382,15 +423,15 @@ void parse_packet(void *pvParameters) {
 				// Otherwise, copy rest of data
 				// The first 3 bytes of first row contain senders address
 				for(int j = 0; j < ADDR_LEN; j++)
-					update_data[i].source[j] = dataRecv[j];
+					update_data[i].source[j] = dsdvRecv[j];
 		
 				// The 4 bytes after destination contain the sequence number
 				update_data[i].sequence_number = 0;
 				for(int j = 0; j < SQNC_LEN; j++)
-					update_data[i].sequence_number |= (((uint32_t) dataRecv[i*MSG_ROW_LEN + ADDR_LEN + j]) << 8*j);
+					update_data[i].sequence_number |= (((uint32_t) dsdvRecv[i*MSG_ROW_LEN + ADDR_LEN + j]) << 8*j);
 
 				// The last byte in row contains number of hops
-				update_data[i].hops = dataRecv[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN];
+				update_data[i].hops = dsdvRecv[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN];
 				if(update_data[i].hops < 255)
 					update_data[i].hops += 1;
 			}
@@ -421,12 +462,12 @@ void nRF24_listen(void *pvParameters) {
 		if (radio.available(&pipeNum)) {
 			if(pipeNum == 1) { 
 				// received broadcast info
-				radio.read(&dataRecv, MSG_LEN);
+				radio.read(&dsdvRecv, MSG_LEN);
 				last_rcvd = xTaskGetTickCount();
-				xSemaphoreGive(semphr_rcvd_packet);
+				xSemaphoreGive(semphr_dsdv_packet);
 			} else {
 				radio.read(&forwardRecv, MSG_LEN);
-				// TODO: parse data directed at device
+				parse_forward();
 			}
 		}
 
@@ -456,10 +497,11 @@ void DSDV_init(uint8_t* local_address) {
 	last_check = last_brcst;
 
 	// Initialize data fields & tables
-	dataRecv = new uint8_t[MSG_LEN];
-	dataSend = new uint8_t[MSG_LEN];
+	dsdvRecv = new uint8_t[MSG_LEN];
+	dsdvSend = new uint8_t[MSG_LEN];
 	forwardRecv = new uint8_t[MSG_LEN];
 	forwardSend = new uint8_t[MSG_LEN];
+	dataRecv = new uint8_t[MSG_LEN - ADDR_LEN - 1];
 
 	table_size_max = TABLE_SIZE_INIT;
 	table_size_cur = 1;
@@ -490,8 +532,9 @@ void DSDV_init(uint8_t* local_address) {
 	xTaskCreate(nRF24_listen, "nRF24_listen", 1024, NULL, 2, NULL);
 
 	// Create semaphor for packet parsing and start task
-	xTaskCreate(parse_packet, "parse_packet", 1024, NULL, 4, NULL);
-	semphr_rcvd_packet = xSemaphoreCreateBinary();
+	xTaskCreate(parse_dsdv_packet, "parse_dsdv_packet", 1024, NULL, 4, NULL);
+	semphr_dsdv_packet = xSemaphoreCreateBinary();
+	semphr_trgt_packet = xSemaphoreCreateBinary();
 
 	// Start broadcasting route info on a timer
 	TimerHandle_t brcst_timer;

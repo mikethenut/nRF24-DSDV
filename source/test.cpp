@@ -139,17 +139,17 @@ void button_task(void *pvParameters) {
 		// button 1 is pressed
 		if ((pcf_byte & button1) == 0) {
 			for(int i = 0; i < MSG_LEN; i++)
-				dataRecv[i] = fake_packetA[i];
+				dsdvRecv[i] = fake_packetA[i];
 
-			xSemaphoreGive(semphr_rcvd_packet);
+			xSemaphoreGive(semphr_dsdv_packet);
 			write_byte_pcf(clr_all);
 
 		// button 2 is pressed
 		} else if ((pcf_byte & button2) == 0) {
 			for(int i = 0; i < MSG_LEN; i++)
-				dataRecv[i] = fake_packetB[i];
+				dsdvRecv[i] = fake_packetB[i];
 
-			xSemaphoreGive(semphr_rcvd_packet);
+			xSemaphoreGive(semphr_dsdv_packet);
 			write_byte_pcf(clr_all);
 		}
 
