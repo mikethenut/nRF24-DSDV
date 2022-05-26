@@ -13,6 +13,8 @@ uint8_t* dsdvSend;
 uint8_t* forwardRecv;
 uint8_t* forwardSend;
 
+uint8_t* trash;
+
 // Data field for packets addressed to this device and length of packet
 uint8_t* dataRecv;
 int dataLen;
@@ -465,12 +467,17 @@ void nRF24_listen(void *pvParameters) {
 		if (radio.available(&pipeNum)) {
 			if(pipeNum == 1) { 
 				// received broadcast info
-				radio.read(&dsdvRecv, MSG_LEN);
+				radio.read(dsdvRecv, MSG_LEN);
 				last_rcvd = xTaskGetTickCount();
 				xSemaphoreGive(semphr_dsdv_packet);
 			} else if(pipeNum == 2) {
-				radio.read(&forwardRecv, MSG_LEN);
+				// received data packet
+				radio.read(forwardRecv, MSG_LEN);
 				parse_data();
+			} else {
+				radio.read(trash, MSG_LEN);
+				if(verbose)
+					printf("nRF24_listen: received unknown input on pipe %d.\n", pipeNum);
 			}
 		}
 	}
