@@ -16,13 +16,8 @@
 #define button4		0x40	// 0b ?0?? ????
 #define clr_all		0xff
 
-// Prints table every 2s
-void table_print_loop(void *pvParameters) {
-    while (1) {
-        print_table();
-	    vTaskDelay(pdMS_TO_TICKS(PRINT_INTERVAL * 1000));
-    }
-}
+const uint8_t target_address[] = {0xCF, 0xED, 0xB2};
+
 
 uint8_t* create_packetA() {
 	routing_row* fake_table = (routing_row*) malloc(4 * sizeof(routing_row));
@@ -153,6 +148,9 @@ void button_task(void *pvParameters) {
 
 			xSemaphoreGive(semphr_dsdv_packet);
 			write_byte_pcf(clr_all);
+		}  else if ((pcf_byte & button3) == 0) {
+			print_table();
+			write_byte_pcf(clr_all);
 		}
 
 		// check again after 200 ms
@@ -165,6 +163,8 @@ extern "C" void user_init(void) {
 	// Get MAC address
 	uint8_t MAC_addr[6];
 	sdk_wifi_get_macaddr(STATION_IF, MAC_addr);
+	// Disable auto-connect just in case
+	sdk_wifi_station_set_auto_connect(0);
 
 	// Use every second byte of MAC as local address
 	uint8_t local_addr[ADDR_LEN];
@@ -180,9 +180,6 @@ extern "C" void user_init(void) {
 	
 	// Initialize DSDV protocol
     DSDV_init(local_addr);
-
-	// Start periodically printing routing table
-	xTaskCreate(table_print_loop, "tbl_prnt_loop", 1024, NULL, 2, NULL);
 
 	// Start monitoring button presses
 	xTaskCreate(button_task, "button_task", 1024, NULL, 4, NULL);

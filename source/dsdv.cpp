@@ -175,7 +175,7 @@ void parse_data() {
 	// Read packet as: destination addr, length, content
 	uint8_t* dest = new uint8_t[ADDR_LEN];
 	for(int i = 0; i < ADDR_LEN; i++)
-		dest[i] = forwardRecv[i];
+		dest[i] = 0x00; //forwardRecv[i];
 	
 	int len = (int) forwardRecv[ADDR_LEN];
 	if(len + ADDR_LEN + 1 > MSG_LEN)
@@ -235,7 +235,7 @@ void full_table_dump() {
 		// Insert dummy rows with network address for unused space
 		for(int i = row; i < ROWS_PER_MSG; i++) {
 			for(int j = 0; j < ADDR_LEN; j++)
-				dsdvSend[row*MSG_ROW_LEN + j] = network_address[j];
+				dsdvSend[i*MSG_ROW_LEN + j] = network_address[j];
 		}
 		nRF24_transmit(dsdvSend, MSG_LEN, (uint8_t *) network_address);
 	}
@@ -254,8 +254,6 @@ void check_table() {
 		printf("check_table: checking table for dead entries.\n");
 
 	TickType_t current_time = xTaskGetTickCount();
-	int to_remove = -1;
-
 	for(int i = 1; i < table_size_cur; i++) {
 		// If the entry is already dead (odd sequence number), leave it alone
 		if(routing_table[i].sequence_number % 2 != 1 && current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(TIMEOUT * 1000)) {
@@ -263,18 +261,23 @@ void check_table() {
 			routing_table[i].hops = 255;
 			routing_table[i].modified = true;
 		}
-
-		// If the entry has been dead for a while, stage it for removal
-		// This is done naively by storing the index; only one row is removed per function call
-		if(current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(ENTRY_DELETE * 1000))
-			to_remove = i;
 	}
 
-	// Remove row if dead for long time
-	if(to_remove != -1) {
-		for(int i = to_remove; i < table_size_cur - 1; i++)
-			routing_table[i] = routing_table[i+1];
-		table_size_cur--;
+	// If entry has been dead for a while, stage it for removal
+	int to_remove = 0;
+	while(to_remove != -1) {
+		to_remove = -1;
+		for(int i = 1; i < table_size_cur; i++) {
+			if(current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(ENTRY_DELETE * 1000))
+				to_remove = i;
+		}
+
+		// Remove dead row if found
+		if(to_remove != -1) {
+			for(int i = to_remove; i < table_size_cur - 1; i++)
+				routing_table[i] = routing_table[i+1];
+			table_size_cur--;
+		}
 	}
 
 	// Update timer
@@ -326,7 +329,7 @@ void brcst_route_info(TimerHandle_t xTimer) {
 		// Insert dummy rows with network address for unused space
 		for(int i = row; i < ROWS_PER_MSG; i++) {
 			for(int j = 0; j < ADDR_LEN; j++)
-				dsdvSend[row*MSG_ROW_LEN + j] = network_address[j];
+				dsdvSend[i*MSG_ROW_LEN + j] = network_address[j];
 		}
 
 		// Send packet
@@ -465,16 +468,11 @@ void nRF24_listen(void *pvParameters) {
 				radio.read(&dsdvRecv, MSG_LEN);
 				last_rcvd = xTaskGetTickCount();
 				xSemaphoreGive(semphr_dsdv_packet);
-			} else {
+			} else if(pipeNum == 2) {
 				radio.read(&forwardRecv, MSG_LEN);
 				parse_data();
 			}
 		}
-
-		// Sleep for 200 ms
-		radio.powerDown();
-		vTaskDelay(pdMS_TO_TICKS(200));
-		radio.powerUp();
 	}
 }
 
