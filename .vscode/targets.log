@@ -7,8 +7,9 @@ make: *** No rule to make target 'all'.  Stop.
 # License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
+ 
 
-# Make data base, printed on Tue May 24 15:14:53 2022
+# Make data base, printed on Thu May 26 09:05:35 2022
 
 # Variables
 
@@ -61,7 +62,7 @@ PROGRAMW6432 = C:\Program Files
 # environment
 PROGRAMDATA = C:\ProgramData
 # environment
-VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-3d4f979b-ffa7-4045-8579-52c8182f82ab-sock
+VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-2e70064f-35e6-42e2-b49d-5729ef704eb7-sock
 # environment
 VSCODE_CWD = C:\Users\mihae\AppData\Local\Programs\Microsoft VS Code
 # default
@@ -97,7 +98,7 @@ NVTOOLSEXT_PATH = C:\Program Files\NVIDIA Corporation\NvToolsExt\
 # automatic
 %F = $(notdir $%)
 # environment
-CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_9492_NXHORJAUFZMTSZEP
+CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_13712_QNAVOZMLIKIQNWHE
 # environment
 VSCODE_PIPE_LOGGING = true
 # environment
@@ -217,7 +218,7 @@ TERM = cygwin
 # environment
 FPS_BROWSER_APP_PROFILE_STRING = Internet Explorer
 # environment
-VSCODE_PID = 9492
+VSCODE_PID = 13712
 # environment
 USERDOMAIN_ROAMINGPROFILE = LAPTOP-VK195BBA
 # variable set hash-table stats:
@@ -281,12 +282,12 @@ GNUmakefile:
 
 # No general ('VPATH' variable) search path.
 
-# strcache buffers: 1 (0) / strings = 16 / storage = 132 B / avg = 8 B
-# current buf: size = 8162 B / used = 132 B / count = 16 / avg = 8 B
+# strcache buffers: 1 (0) / strings = 16 / storage = 142 B / avg = 8 B
+# current buf: size = 8162 B / used = 142 B / count = 16 / avg = 8 B
 
 # strcache performance: lookups = 19 / hit rate = 15%
 # hash-table stats:
 # Load=16/8192=0%, Rehash=0, Collisions=1/19=5%
-# Finished Make data base on Tue May 24 15:14:53 2022
+# Finished Make data base on Thu May 26 09:05:35 2022
 
  
