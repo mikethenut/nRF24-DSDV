@@ -1,4 +1,7 @@
 #include "dsdv.h"
+
+#include <string.h>
+
 #include "i2c/i2c.h"
 # include "espressif/esp_wifi.h"
 
@@ -17,6 +20,9 @@
 #define clr_all		0xff
 
 const uint8_t target_address[] = {0xCF, 0xED, 0xB2};
+
+uint8_t messageLen;
+uint8_t *message;
 
 
 uint8_t* create_packetA() {
@@ -126,30 +132,33 @@ static inline uint8_t read_byte_pcf() {
 
 void button_task(void *pvParameters) {
 
-	uint8_t* fake_packetA = create_packetA();
-	uint8_t* fake_packetB = create_packetB();
+	// uint8_t* fake_packetA = create_packetA();
+	// uint8_t* fake_packetB = create_packetB();
+
+	// Example use:
+	// for(int i = 0; i < MSG_LEN; i++)
+	//     dsdvRecv[i] = fake_packetA[i];
+	// xSemaphoreGive(semphr_dsdv_packet);
+	
 	uint8_t pcf_byte;
 
 	while (1) {
 		pcf_byte = read_byte_pcf();
 
-		// button 1 is pressed
 		if ((pcf_byte & button1) == 0) {
-			for(int i = 0; i < MSG_LEN; i++)
-				dsdvRecv[i] = fake_packetA[i];
-
-			xSemaphoreGive(semphr_dsdv_packet);
-			write_byte_pcf(clr_all);
-
-		// button 2 is pressed
-		} else if ((pcf_byte & button2) == 0) {
-			for(int i = 0; i < MSG_LEN; i++)
-				dsdvRecv[i] = fake_packetB[i];
-
-			xSemaphoreGive(semphr_dsdv_packet);
-			write_byte_pcf(clr_all);
-		}  else if ((pcf_byte & button3) == 0) {
 			print_table();
+
+			write_byte_pcf(clr_all);
+
+		} else if ((pcf_byte & button2) == 0) {
+			forward_data(message, messageLen, target_address);
+
+			write_byte_pcf(clr_all);
+		} else if ((pcf_byte & button3) == 0) {
+			
+			write_byte_pcf(clr_all);
+		} else if ((pcf_byte & button4) == 0) {
+
 			write_byte_pcf(clr_all);
 		}
 
@@ -181,8 +190,23 @@ extern "C" void user_init(void) {
 	// Initialize DSDV protocol
     DSDV_init(local_addr);
 
+	// Prepare message
+	messageLen = 16;
+	message = (uint8_t *) malloc(16*sizeof(uint8_t));
+	char* tmp = (char *) malloc(3*sizeof(uint8_t));
+	message[0] = (uint8_t) '\0';
+	strcat((char *) message, "This is ");
+	for(int i = 0; i < 3; i++) {
+		sprintf(tmp, "%02X", local_addr[i]);
+		strcat((char *) message, tmp);
+	}
+	strcat((char *) message, ".");
+
 	// Start monitoring button presses
 	xTaskCreate(button_task, "button_task", 1024, NULL, 4, NULL);
+
+	// TODO: monitor for received messages
+	// TODO: light leds when sending & receiving messages
 
 }
 

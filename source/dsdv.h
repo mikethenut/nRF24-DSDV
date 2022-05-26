@@ -36,19 +36,19 @@ extern bool verbose;
 #define TABLE_SIZE_INIT	4
 
 // Determines how often incremental changes should be broadcast (in sec)
-#define BRCST_INTERVAL	16
+#define BRCST_INTERVAL	8
 
 // Determines how often full table dump should be broadcast (in sec, should be multiple of BRCST_INTERVAL)
-#define DUMP_INTERVAL	60
+#define DUMP_INTERVAL	48
 
 // Determines how often table should be checked for dead entries (in sec, should be multiple of BRCST_INTERVAL)
-#define CHECK_INTERVAL	60
+#define CHECK_INTERVAL	24
 
 // Determines when an entry is considered dead after no communication (in sec)
-#define TIMEOUT			180
+#define TIMEOUT			40
 
 // Determines when an entry is deleted after no communication (in sec)
-#define ENTRY_DELETE	300
+#define ENTRY_DELETE	80
 
 
 /*

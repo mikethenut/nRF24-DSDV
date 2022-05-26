@@ -122,12 +122,19 @@ int addr_index(uint8_t* addr) {
 
 // Sends nRF24 packet
 void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
+	// Make sure to power down & up before sending
+	// This seems device dependent (have not seen others have this issue)
 	radio.stopListening();
-	radio.openWritingPipe(addr);
-	radio.write(&data, len);
+	radio.powerDown();
+	vTaskDelay(pdMS_TO_TICKS(200));
+	radio.powerUp();
 
-	radio.openReadingPipe(1, network_address);
-	radio.openReadingPipe(2, device_address);
+	radio.openWritingPipe(addr);
+	radio.write(data, len, true);
+
+	radio.toggleAllPipes(false);
+	radio.openReadingPipe(0, network_address);
+	radio.openReadingPipe(1, device_address);
 	radio.startListening();
 
 	// If configured, print packet
@@ -407,13 +414,6 @@ void parse_dsdv_packet(void *pvParameters) {
 
 	while (1) {
 		if(xSemaphoreTake(semphr_dsdv_packet, (TickType_t) 10) == pdTRUE) {
-
-			// If configured, print packet
-			if(print_incoming_packet) {
-				printf("RCVD PACKET: ");
-				print_bytes(dsdvRecv, MSG_LEN);
-			}
-
 			// The packet contains 4 entries of 8 bytes, the first being the sender
 			for(int i = 0; i < ROWS_PER_MSG; i++) {
 		
@@ -465,21 +465,42 @@ void nRF24_listen(void *pvParameters) {
 
 	while (1) {
 		if (radio.available(&pipeNum)) {
-			if(pipeNum == 1) { 
+			if(pipeNum == 0) { 
 				// received broadcast info
 				radio.read(dsdvRecv, MSG_LEN);
 				last_rcvd = xTaskGetTickCount();
+
+				// If configured, print packet
+				if(print_incoming_packet) {
+					printf("RCVD DSDV PACKET: ");
+					print_bytes(dsdvRecv, MSG_LEN);
+				}
+
 				xSemaphoreGive(semphr_dsdv_packet);
-			} else if(pipeNum == 2) {
+			} else if(pipeNum == 1) {
 				// received data packet
 				radio.read(forwardRecv, MSG_LEN);
+
+				// If configured, print packet
+				if(print_incoming_packet) {
+					printf("RCVD DATA PACKET: ");
+					print_bytes(forwardRecv, MSG_LEN);
+				}
+				
 				parse_data();
 			} else {
 				radio.read(trash, MSG_LEN);
-				if(verbose)
-					printf("nRF24_listen: received unknown input on pipe %d.\n", pipeNum);
+
+				// If configured, print packet
+				if(print_incoming_packet) {
+					printf("RCVD ???? PACKET (pipe %d): ", pipeNum);
+					print_bytes(trash, MSG_LEN);
+				}
 			}
 		}
+
+		// sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
 	}
 }
 
@@ -507,6 +528,7 @@ void DSDV_init(uint8_t* local_address) {
 	forwardRecv = new uint8_t[MSG_LEN];
 	forwardSend = new uint8_t[MSG_LEN];
 	dataRecv = new uint8_t[MSG_LEN - ADDR_LEN - 1];
+	trash = new uint8_t[MSG_LEN];
 
 	table_size_max = TABLE_SIZE_INIT;
 	table_size_cur = 1;
@@ -528,9 +550,14 @@ void DSDV_init(uint8_t* local_address) {
 	// Radio initialization
 	radio.begin();
 	radio.setChannel(channel);
+	radio.setAddressWidth(ADDR_LEN);
+	radio.setPayloadSize(MSG_LEN);
+	radio.setDataRate(RF24_1MBPS);
 	radio.setAutoAck(false);
-    radio.openReadingPipe(1, network_address);
-	radio.openReadingPipe(2, device_address);
+	
+	radio.toggleAllPipes(false);
+    radio.openReadingPipe(0, network_address);
+	radio.openReadingPipe(1, device_address);
 	radio.startListening();
 
 	// Start listening for incoming packets
