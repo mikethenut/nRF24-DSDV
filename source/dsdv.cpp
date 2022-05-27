@@ -26,6 +26,7 @@ uint8_t device_address[ADDR_LEN];
 static RF24 radio(CE_NRF, CS_NRF);
 
 SemaphoreHandle_t semphr_dsdv_packet;
+SemaphoreHandle_t semphr_dsdv_table;
 SemaphoreHandle_t semphr_trgt_packet;
 
 TickType_t last_rcvd;
@@ -66,7 +67,15 @@ uint8_t get_utable_size() {
 }
 
 // Prints full routing table to stdout
+// Takes mutex lock for routing table access
 void print_table() {
+	BaseType_t mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	while(!mutex_available) {
+		// Sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
+		mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	}
+
 	TickType_t current_time = xTaskGetTickCount();
 	printf("-------------------------------------------------\n");
 	printf(" DEST  | NXTHOP | LEN | SEQUENCE | MOD | AGE (s)\n");
@@ -86,6 +95,8 @@ void print_table() {
 		printf("%d\n", (current_time - routing_table[i].last_rcvd) / configTICK_RATE_HZ);
 	}
 	printf("-------------------------------------------------\n");
+
+	xSemaphoreGive(semphr_dsdv_table);
 }
 
 // Prints bytes to stdout as hex
@@ -111,6 +122,7 @@ bool equal_addr(uint8_t* addr1, uint8_t* addr2) {
 }
 
 // Finds destination address index in routing table, returns -1 otherwise
+// Should only be called from mutex lock for routing table access
 int addr_index(uint8_t* addr) {
 	int addr_ind = -1;
 	for(int i = 0; i < table_size_cur; i++) {
@@ -152,6 +164,7 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 */
 
 // Forwards data packet according to routing table
+// Takes mutex lock for routing table access
 bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 	if(equal_addr(destination, device_address)) {
 		if(verbose)
@@ -169,6 +182,13 @@ bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 		if(verbose)
 			printf("forward_data: packet cannot be routed (too long).\n");
 		return false;
+	}
+
+	BaseType_t mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	while(!mutex_available) {
+		// Sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
+		mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
 	}
 
 	int route_ind = addr_index(destination);
@@ -191,6 +211,8 @@ bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 		nRF24_transmit(forwardSend, ADDR_LEN + len + 1, routing_table[route_ind].next_hop);
 		return true;
 	}
+
+	xSemaphoreGive(semphr_dsdv_table);
 }
 
 void parse_data() {
@@ -225,6 +247,7 @@ void parse_data() {
 }
 
 // This function dumps entire table into network
+// Should only be called from mutex lock for routing table access
 void full_table_dump() {
 	if(verbose)
 		printf("full_table_dump: dumping entire routing table.\n");
@@ -274,6 +297,7 @@ void full_table_dump() {
 }
 
 // This function checks table for dead entries
+// Should only be called from mutex lock for routing table access
 void check_table() {
 	if(verbose)
 		printf("check_table: checking table for dead entries.\n");
@@ -310,7 +334,15 @@ void check_table() {
 }
 
 // This function prepares data for incremental table broadcast and schedules transmission
+// Takes mutex lock for routing table access
 void brcst_route_info(TimerHandle_t xTimer) {
+	BaseType_t mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	while(!mutex_available) {
+		// Sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
+		mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	}
+
 	if(verbose)
 		printf("brcst_route_info: broadcasting routing information.\n");
 
@@ -364,10 +396,20 @@ void brcst_route_info(TimerHandle_t xTimer) {
 		routing_table[0].sequence_number += 2;
 		routing_table[0].last_rcvd = xTaskGetTickCount();
 	}
+
+	xSemaphoreGive(semphr_dsdv_table);
 }
 
 // This function updates routing table based on data in update table
+// Takes mutex lock for routing table access
 void update_table() {
+	BaseType_t mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	while(!mutex_available) {
+		// Sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
+		mutex_available = xSemaphoreTake(semphr_dsdv_table, (TickType_t) 10);
+	}
+
 	if(verbose)
 		printf("update_table: updating routing table.\n");
 
@@ -421,6 +463,8 @@ void update_table() {
 			}
 		}
 	}
+
+	xSemaphoreGive(semphr_dsdv_table);
 }
 
 // This function reads incoming DSDV packets into update table
@@ -439,7 +483,7 @@ void parse_dsdv_packet(void *pvParameters) {
 					update_data[i].destination[j] = dsdvRecv[i*MSG_ROW_LEN + j];
 		
 				// If the address is equal to network address, discard it
-				if(equal_addr(update_data[i].destination, (uint8_t *) network_address)
+				if(equal_addr(update_data[i].destination, (uint8_t *) network_address) ||
 				   equal_addr(update_data[i].destination, (uint8_t *) device_address))
 					continue;
 
@@ -584,6 +628,7 @@ void DSDV_init(uint8_t* local_address) {
 	// Create semaphor for packet parsing and start task
 	xTaskCreate(parse_dsdv_packet, "parse_dsdv_packet", 1024, NULL, 4, NULL);
 	semphr_dsdv_packet = xSemaphoreCreateBinary();
+	semphr_dsdv_table = xSemaphoreCreateMutex();
 	semphr_trgt_packet = xSemaphoreCreateBinary();
 
 	// Start broadcasting route info on a timer

@@ -89,7 +89,7 @@ uint8_t* create_packet_DSDV() {
 	return fake_packet;
 }
 
-// This function displays received messages
+// This function displays received messages addressed to this device
 void receive_packet(void *pvParameters) {
 	while (1) {
 		if(xSemaphoreTake(semphr_trgt_packet, (TickType_t) 10) == pdTRUE) {
@@ -154,7 +154,7 @@ extern "C" void user_init(void) {
 	print_incoming_packet = true;
 	print_outgoing_packet = true;
 
-	//If enabled, application prints every core function invocation; can be reconfigured dynamically
+	//prints function invocation
 	verbose = true;
 	
 	// Initialize DSDV protocol
@@ -178,7 +178,6 @@ extern "C" void user_init(void) {
 	// Start listening for messages
 	xTaskCreate(receive_packet, "receive_packet", 1024, NULL, 3, NULL);
 
-	// TODO: add mutex semaphor
 	// TODO: light leds when sending & receiving messages
 
 }
