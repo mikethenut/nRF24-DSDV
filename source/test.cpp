@@ -69,12 +69,7 @@ void receive_packet(void *pvParameters) {
 
 void button_task(void *pvParameters) {
 
-	// uint8_t* fake_packet = create_packet_DSDV();
-	// Example use:
-	// for(int i = 0; i < MSG_LEN; i++)
-	//     dsdvRecv[i] = fake_packet[i];
-	// xSemaphoreGive(semphr_dsdv_packet);
-	
+	uint8_t* fake_packet = create_packet_DSDV();
 	uint8_t pcf_byte;
 
 	while (1) {
@@ -90,6 +85,9 @@ void button_task(void *pvParameters) {
 
 			write_byte_pcf(clr_all);
 		} else if ((pcf_byte & button3) == 0) {
+			for(int i = 0; i < MSG_LEN; i++)
+				dsdvRecv[i] = fake_packet[i];
+			xSemaphoreGive(semphr_dsdv_packet);
 			
 			write_byte_pcf(clr_all);
 		} else if ((pcf_byte & button4) == 0) {
@@ -115,14 +113,14 @@ extern "C" void user_init(void) {
 	for(int i=0; i < ADDR_LEN; i++)
 		local_addr[i] = MAC_addr[2*i+1];
 	
-	// Turn on verbose mode
+	// print all traffic
 	print_incoming_packet = true;
 	print_outgoing_packet = true;
 
 	// Turns on LED flashing
 	comm_led_flash = true;
 
-	//prints function invocation
+	// prints function invocation
 	verbose = true;
 	
 	// Initialize DSDV protocol
@@ -146,7 +144,4 @@ extern "C" void user_init(void) {
 	// Start listening for messages
 	xTaskCreate(receive_packet, "receive_packet", 1024, NULL, 3, NULL);
 
-	// TODO: light leds when sending & receiving messages
-
 }
-

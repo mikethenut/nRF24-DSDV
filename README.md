@@ -21,7 +21,7 @@ The algorithm works by storing entries for each known device in the network. Eac
 
 ## Configuration & Manual
 
-###  Basic usage
+### Basic usage
 
 The following variables can be configured statically inside *dsdv.h*:
 
@@ -79,9 +79,9 @@ The following data fields can be configured or accessed dynamically during execu
 - **update_row* update_data**: Update table used as intermediate between incoming DSDV packets and routing table. It is not access controlled.
 - **routing_row* routing_table**: Routing table that stores all DSDV routing information. Any changes should be done either by storing data into dsdvRecv and activating semphr_dsdv_packet, or after taking mutex semphr_dsdv_table.
 
-## Example Description
+## Description of Example
 
-
+The example in *test.cpp* first determines its own local address. It enables printing of all network traffic and core function invocations to standard output, as well as blinking of LED lights when receiving or sending packets. Then it initializes the DSDV protocol with its address and prepares the message to route. It launches a task that listens for the semaphor announcing messages addressed to the device, and prints the message to standard output accordingly. It launches also a task that listens for button presses. The first button prints the routing table to standard output, while the second button routes the prepared message to the hard-coded destination. The third button copies fake information into the field for received DSDV packets and triggers the semaphor that tells the protocol to process it. The fourth button doesn't do anything.
 
 ## Sources & Reading
 
@@ -90,8 +90,3 @@ The following data fields can be configured or accessed dynamically during execu
 - Some advice on [nRF24 addressing](http://maniacalbits.blogspot.com/2013/04/rf24-addressing-nrf24l01-radios-require.html).
 - This issue on [nRF24 pipe 7](https://github.com/nRF24/RF24/issues/394). It was fixed by updating relevant functions in the nRF24 library. Further fix was necessary by powering down the radio briefly when switching between receiving and sending messages.
 - Two similar projects by [joshua-jerred](https://github.com/joshua-jerred/DSDV) and [lukefilma](https://github.com/lukeflima/DSDV) were also inspected. Although never used as a direct source, they were convenient for comparing implementation details and might be of use to others interested in the topic.
-
-## TO-DO
-
-- dopolnitev GitHub repo z opisom strukture projekta
-- izvedba in dodaja eksperimenta
