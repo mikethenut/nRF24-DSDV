@@ -107,9 +107,6 @@
 #ifndef configUSE_MUTEXES
 #define configUSE_MUTEXES  1
 #endif
-#ifndef configUSE_TIMERS
-#define configUSE_TIMERS    1
-#endif
 
 #define configUSE_TIMERS 1
 #define configTIMER_TASK_PRIORITY 6

@@ -2,52 +2,17 @@
 
 #include <string.h>
 
-#include "i2c/i2c.h"
-# include "espressif/esp_wifi.h"
+#include "espressif/esp_wifi.h"
 
 #define PRINT_INTERVAL	10
 
 #define CS_NRF		0
-#define BUS_I2C		0
-#define PCF_ADDRESS	0x38
 #define SCL 		14
-#define SDA 		12
-
-#define button1		0x20	// 0b ??0? ????
-#define button2		0x10	// 0b ???0 ????
-#define button3		0x80	// 0b 0??? ????
-#define button4		0x40	// 0b ?0?? ????
-#define clr_all		0xff
 
 const uint8_t target_address[] = {0xCF, 0xED, 0xB2};
 
 uint8_t messageLen;
 uint8_t *message;
-
-// write byte to PCF on I2C bus
-static inline void write_byte_pcf(uint8_t data) {
-
-	// disable radio
-	gpio_write(CS_NRF, 1);
-	// reinitialize i2c
-	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
-	// write data byte
-	i2c_slave_write(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
-}
-
-// read byte from PCF on I2C bus
-static inline uint8_t read_byte_pcf() {
-	uint8_t data;
-
-	// disable radio
-	gpio_write(CS_NRF, 1);
-	// reinitialize i2c
-	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
-	// read data byte
-	i2c_slave_read(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
-
-	return data;
-}
 
 uint8_t* create_packet_DSDV() {
 	routing_row* fake_table = (routing_row*) malloc(4 * sizeof(routing_row));
@@ -153,6 +118,9 @@ extern "C" void user_init(void) {
 	// Turn on verbose mode
 	print_incoming_packet = true;
 	print_outgoing_packet = true;
+
+	// Turns on LED flashing
+	comm_led_flash = true;
 
 	//prints function invocation
 	verbose = true;

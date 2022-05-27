@@ -41,6 +41,54 @@ bool print_outgoing_packet = false;
 //If enabled, application prints every core function invocation
 bool verbose = false;
 
+// If enabled, application flashes LEDs when receiving/sending packets
+bool comm_led_flash = false;
+
+
+/*
+** I2C FUNCTIONS
+*/
+
+#if INCLUDE_I2C_BUS_SUPPORT
+
+// write byte to PCF on I2C bus
+void write_byte_pcf(uint8_t data) {
+
+	// disable radio
+	gpio_write(CS_NRF, 1);
+	// reinitialize i2c
+	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
+	// write data byte
+	i2c_slave_write(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
+}
+
+// read byte from PCF on I2C bus
+uint8_t read_byte_pcf() {
+	uint8_t data;
+
+	// disable radio
+	gpio_write(CS_NRF, 1);
+	// reinitialize i2c
+	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
+	// read data byte
+	i2c_slave_read(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
+
+	return data;
+}
+
+#else
+
+void write_byte_pcf(uint8_t data) {
+	printf("ERROR: I2C BUS NOT ENABLED.");
+}
+
+uint8_t read_byte_pcf() {
+	printf("ERROR: I2C BUS NOT ENABLED.");
+	return NULL;
+}
+
+#endif
+
 
 /*
 ** EXTERNAL HELPER FUNCTIONS
@@ -156,6 +204,17 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 		printf("TO ADDRESS: ");
 		print_bytes(addr, ADDR_LEN);
 	}
+
+	// If configured, flash LED
+	if(comm_led_flash) {
+		uint8_t pcf_byte = read_byte_pcf();
+		if(equal_addr(addr, (uint8_t *) network_address))
+			write_byte_pcf(pcf_byte & led1);
+		else
+			write_byte_pcf(pcf_byte & led3);
+		vTaskDelay(pdMS_TO_TICKS(200));
+		write_byte_pcf(clr_all);
+	}
 }
 
 
@@ -195,6 +254,8 @@ bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 	if(route_ind == -1) {
 		if(verbose)
 			printf("forward_data: packet cannot be routed (no target).\n");
+
+		xSemaphoreGive(semphr_dsdv_table);
 		return false;
 
 	} else {
@@ -209,10 +270,10 @@ bool forward_data(uint8_t* data, int len, uint8_t* destination) {
 			forwardSend[ADDR_LEN + i + 1] = data[i];
 		
 		nRF24_transmit(forwardSend, ADDR_LEN + len + 1, routing_table[route_ind].next_hop);
+		xSemaphoreGive(semphr_dsdv_table);
 		return true;
 	}
 
-	xSemaphoreGive(semphr_dsdv_table);
 }
 
 void parse_data() {
@@ -527,6 +588,7 @@ void nRF24_listen(void *pvParameters) {
 
 	while (1) {
 		if (radio.available(&pipeNum)) {
+
 			if(pipeNum == 0) { 
 				// received broadcast info
 				radio.read(dsdvRecv, MSG_LEN);
@@ -538,7 +600,16 @@ void nRF24_listen(void *pvParameters) {
 					print_bytes(dsdvRecv, MSG_LEN);
 				}
 
+				// If configured, flash LED
+				if(comm_led_flash) {
+					uint8_t pcf_byte = read_byte_pcf();
+					write_byte_pcf(pcf_byte & led2);
+					vTaskDelay(pdMS_TO_TICKS(200));
+					write_byte_pcf(clr_all);
+				}
+
 				xSemaphoreGive(semphr_dsdv_packet);
+
 			} else if(pipeNum == 1) {
 				// received data packet
 				radio.read(forwardRecv, MSG_LEN);
@@ -548,8 +619,17 @@ void nRF24_listen(void *pvParameters) {
 					printf("RCVD DATA PACKET: ");
 					print_bytes(forwardRecv, MSG_LEN);
 				}
+
+				// If configured, flash LED
+				if(comm_led_flash) {
+					uint8_t pcf_byte = read_byte_pcf();
+					write_byte_pcf(pcf_byte & led4);
+					vTaskDelay(pdMS_TO_TICKS(200));
+					write_byte_pcf(clr_all);
+				}
 				
 				parse_data();
+
 			} else {
 				radio.read(trash, MSG_LEN);
 

@@ -24,12 +24,8 @@
 const uint8_t channel = 78;
 const uint8_t network_address[] = {0x6E, 0x52, 0x46};
 
-// If enabled, application prints every packet received/sent; can be reconfigured dynamically
-extern bool print_incoming_packet;
-extern bool print_outgoing_packet;
-
-//If enabled, application prints every core function invocation; can be reconfigured dynamically
-extern bool verbose;
+// Set this to 1 if you want to use I2C bus in your application
+#define INCLUDE_I2C_BUS_SUPPORT		1
 
 // Determines how many destinations can be stored in routing table at initialization
 // The table size is doubled when full and new destination is to be added
@@ -49,6 +45,18 @@ extern bool verbose;
 
 // Determines when an entry is deleted after no communication (in sec)
 #define ENTRY_DELETE	80
+
+// If enabled, application prints every packet received/sent; can be reconfigured dynamically
+extern bool print_incoming_packet;
+extern bool print_outgoing_packet;
+
+// If enabled, application flashes LEDs when receiving/sending packets
+// led1=snd_dsdv, led2=rcv_dsdv, led3=snd_data, led4=rcv_data
+// MUST INCLUDE I2C_BUS_SUPPORT TO USE
+extern bool comm_led_flash;
+
+//If enabled, application prints every core function invocation; can be reconfigured dynamically
+extern bool verbose;
 
 
 /*
@@ -139,6 +147,39 @@ void print_table();
 
 // Prints len bytes to stdout as hex
 void print_bytes(uint8_t* data, int len);
+
+
+/*
+** I2C BUS USAGE
+*/
+
+#if INCLUDE_I2C_BUS_SUPPORT
+
+#include "i2c/i2c.h"
+
+#define BUS_I2C		0
+#define PCF_ADDRESS	0x38
+#define SDA 		12
+
+#define button1		0x20	// 0b ??0? ????
+#define button2		0x10	// 0b ???0 ????
+#define button3		0x80	// 0b 0??? ????
+#define button4		0x40	// 0b ?0?? ????
+#define clr_btn		0xf0
+
+#define led1 		0xfe	// 0b ???? ???0
+#define led2 		0xfd	// 0b ???? ??0?
+#define led3 		0xfb	// 0b ???? ?0??
+#define led4 		0xf7	// 0b ???? 0???
+#define clr_all		0xff
+
+// write byte to PCF on I2C bus
+void write_byte_pcf(uint8_t data);
+
+// read byte from PCF on I2C bus
+uint8_t read_byte_pcf();
+
+#endif
 
 #endif
 
