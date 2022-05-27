@@ -24,8 +24,32 @@ const uint8_t target_address[] = {0xCF, 0xED, 0xB2};
 uint8_t messageLen;
 uint8_t *message;
 
+// write byte to PCF on I2C bus
+static inline void write_byte_pcf(uint8_t data) {
 
-uint8_t* create_packetA() {
+	// disable radio
+	gpio_write(CS_NRF, 1);
+	// reinitialize i2c
+	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
+	// write data byte
+	i2c_slave_write(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
+}
+
+// read byte from PCF on I2C bus
+static inline uint8_t read_byte_pcf() {
+	uint8_t data;
+
+	// disable radio
+	gpio_write(CS_NRF, 1);
+	// reinitialize i2c
+	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
+	// read data byte
+	i2c_slave_read(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
+
+	return data;
+}
+
+uint8_t* create_packet_DSDV() {
 	routing_row* fake_table = (routing_row*) malloc(4 * sizeof(routing_row));
 	fake_table[0].destination[0] = 0x00;
 	fake_table[0].destination[1] = 0x00;
@@ -65,79 +89,25 @@ uint8_t* create_packetA() {
 	return fake_packet;
 }
 
-uint8_t* create_packetB() {
-	routing_row* fake_table = (routing_row*) malloc(4 * sizeof(routing_row));
-	fake_table[0].destination[0] = 0x00;
-	fake_table[0].destination[1] = 0x00;
-	fake_table[0].destination[2] = 0x0B;
-	fake_table[0].hops = 0;
-	fake_table[0].sequence_number = 20;
+// This function displays received messages
+void receive_packet(void *pvParameters) {
+	while (1) {
+		if(xSemaphoreTake(semphr_trgt_packet, (TickType_t) 10) == pdTRUE) {
+			dataRecv[dataLen] = (uint8_t) '\0';
+			printf("%s\n", (char*) dataRecv);
+		}
 
-	fake_table[1].destination[0] = 0x00;
-	fake_table[1].destination[1] = 0x00;
-	fake_table[1].destination[2] = 0x0A;
-	fake_table[1].hops = 1;
-	fake_table[1].sequence_number = 22;
-
-	fake_table[2].destination[0] = 0x00;
-	fake_table[2].destination[1] = 0x00;
-	fake_table[2].destination[2] = 0x6A;
-	fake_table[2].hops = 3;
-	fake_table[2].sequence_number = 38;
-
-	fake_table[3].destination[0] = 0x00;
-	fake_table[3].destination[1] = 0x00;
-	fake_table[3].destination[2] = 0x6C;
-	fake_table[3].hops = 5;
-	fake_table[3].sequence_number = 68;
-
-	uint8_t* fake_packet = new uint8_t[MSG_LEN];
-	for(int i = 0; i < 4; i++) {
-		for(int j = 0; j < ADDR_LEN; j++)
-			fake_packet[i*MSG_ROW_LEN + j] = fake_table[i].destination[j];
-
-		for(int j = 0; j < SQNC_LEN; j++)
-			fake_packet[i*MSG_ROW_LEN + ADDR_LEN + j] = (uint8_t) (fake_table[i].sequence_number >> 8*j) & 0xFF;
-
-		fake_packet[i*MSG_ROW_LEN + ADDR_LEN + SQNC_LEN] = fake_table[i].hops;
+		// Sleep for 200 ms
+		vTaskDelay(pdMS_TO_TICKS(200));
 	}
-
-	return fake_packet;
-}
-
-// write byte to PCF on I2C bus
-static inline void write_byte_pcf(uint8_t data) {
-
-	// disable radio
-	gpio_write(CS_NRF, 1);
-	// reinitialize i2c
-	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
-	// write data byte
-	i2c_slave_write(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
-}
-
-// read byte from PCF on I2C bus
-static inline uint8_t read_byte_pcf() {
-	uint8_t data;
-
-	// disable radio
-	gpio_write(CS_NRF, 1);
-	// reinitialize i2c
-	i2c_init(BUS_I2C, SCL, SDA, I2C_FREQ_100K);
-	// read data byte
-	i2c_slave_read(BUS_I2C, PCF_ADDRESS, NULL, &data, 1);
-
-	return data;
 }
 
 void button_task(void *pvParameters) {
 
-	// uint8_t* fake_packetA = create_packetA();
-	// uint8_t* fake_packetB = create_packetB();
-
+	// uint8_t* fake_packet = create_packet_DSDV();
 	// Example use:
 	// for(int i = 0; i < MSG_LEN; i++)
-	//     dsdvRecv[i] = fake_packetA[i];
+	//     dsdvRecv[i] = fake_packet[i];
 	// xSemaphoreGive(semphr_dsdv_packet);
 	
 	uint8_t pcf_byte;
@@ -205,7 +175,7 @@ extern "C" void user_init(void) {
 	// Start monitoring button presses
 	xTaskCreate(button_task, "button_task", 1024, NULL, 4, NULL);
 
-	// TODO: monitor for received messages
+	// TODO: add mutex semaphor
 	// TODO: light leds when sending & receiving messages
 
 }
