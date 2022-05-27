@@ -97,20 +97,23 @@ struct routing_row {
 	TickType_t last_rcvd;
 };
  
-// Data field for received DSDV packet (32bit)
-extern uint8_t* dsdvRecv;
-// Data field for DSDV packet to be sent (32bit)
-extern uint8_t* dsdvSend;
+// Semaphor activated when device receives packed addressed to it
+extern SemaphoreHandle_t semphr_trgt_packet;
 
 // Data field for packets addressed to this device and length of packet
 extern uint8_t* dataRecv;
 extern int dataLen;
 
-// Semaphor activated when device receives packed addressed to it
-extern SemaphoreHandle_t semphr_trgt_packet;
-
 // Semaphor for triggering parsing of dsdvRecv (incoming protocol data)
 extern SemaphoreHandle_t semphr_dsdv_packet;
+
+// Data field for received DSDV packet (32bit)
+extern uint8_t* dsdvRecv;
+// Data field for DSDV packet to be sent (32bit)
+extern uint8_t* dsdvSend;
+
+// Mutex semaphor for taking direct access to the routing table.
+extern SemaphoreHandle_t semphr_dsdv_table;
 
 // Contains data parsed from received packet (get_utable_size() entries)
 extern update_row* update_data;

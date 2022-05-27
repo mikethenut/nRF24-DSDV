@@ -219,7 +219,7 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 
 
 /*
-** MAIN DSDV FUNCTIONS
+** ROUTING FUNCTIONS
 */
 
 // Forwards data packet according to routing table
@@ -306,6 +306,11 @@ void parse_data() {
 	free(dest);
 	free(data);
 }
+
+
+/*
+** MAIN DSDV FUNCTIONS
+*/
 
 // This function dumps entire table into network
 // Should only be called from mutex lock for routing table access
