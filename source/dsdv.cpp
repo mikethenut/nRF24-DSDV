@@ -153,18 +153,34 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 
 // Forwards data packet according to routing table
 bool forward_data(uint8_t* data, int len, uint8_t* destination) {
+	if(equal_addr(destination, device_address)) {
+		if(verbose)
+			printf("forward_data: packet addressed to device.\n");
+
+		for(int i = 0; i < len; i++)
+			dataRecv[i] = data[i];
+		dataLen = len;
+		
+		xSemaphoreGive(semphr_trgt_packet);
+		return true;
+	}
+
 	if(len + ADDR_LEN + 1 > MSG_LEN) {
-		printf("forward_data: packet cannot be routed.\n");
+		if(verbose)
+			printf("forward_data: packet cannot be routed (too long).\n");
 		return false;
 	}
-	
-	if(verbose)
-		printf("forward_data: routing packet according to table.\n");
 
 	int route_ind = addr_index(destination);
-	if(route_ind == -1)
+	if(route_ind == -1) {
+		if(verbose)
+			printf("forward_data: packet cannot be routed (no target).\n");
 		return false;
-	else {
+
+	} else {
+		if(verbose)
+			printf("forward_data: routing packet according to table.\n");
+
 		// Format packet as: destination addr, length, content
 		for(int i = 0; i < ADDR_LEN; i++)
 			forwardSend[i] = destination[i];
@@ -184,7 +200,7 @@ void parse_data() {
 	// Read packet as: destination addr, length, content
 	uint8_t* dest = new uint8_t[ADDR_LEN];
 	for(int i = 0; i < ADDR_LEN; i++)
-		dest[i] = 0x00; //forwardRecv[i];
+		dest[i] = forwardRecv[i];
 	
 	int len = (int) forwardRecv[ADDR_LEN];
 	if(len + ADDR_LEN + 1 > MSG_LEN)
@@ -356,8 +372,9 @@ void update_table() {
 		printf("update_table: updating routing table.\n");
 
 	for(int i = 0; i < ROWS_PER_MSG; i++) {
-		// If the address is equal to network address, discard it
-		if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
+		// If the address is equal to network address or own address, discard it
+		if(equal_addr(update_data[i].destination, (uint8_t *) network_address) ||
+		   equal_addr(update_data[i].destination, (uint8_t *) device_address))
 			continue;
 
 		// Find routing table row for address
@@ -422,7 +439,8 @@ void parse_dsdv_packet(void *pvParameters) {
 					update_data[i].destination[j] = dsdvRecv[i*MSG_ROW_LEN + j];
 		
 				// If the address is equal to network address, discard it
-				if(equal_addr(update_data[i].destination, (uint8_t *) network_address))
+				if(equal_addr(update_data[i].destination, (uint8_t *) network_address)
+				   equal_addr(update_data[i].destination, (uint8_t *) device_address))
 					continue;
 
 				// Otherwise, copy rest of data

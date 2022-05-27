@@ -94,7 +94,7 @@ void receive_packet(void *pvParameters) {
 	while (1) {
 		if(xSemaphoreTake(semphr_trgt_packet, (TickType_t) 10) == pdTRUE) {
 			dataRecv[dataLen] = (uint8_t) '\0';
-			printf("%s\n", (char*) dataRecv);
+			printf("Received message: \"%s\"\n", (char*) dataRecv);
 		}
 
 		// Sleep for 200 ms
@@ -121,7 +121,7 @@ void button_task(void *pvParameters) {
 			write_byte_pcf(clr_all);
 
 		} else if ((pcf_byte & button2) == 0) {
-			forward_data(message, messageLen, target_address);
+			forward_data(message, messageLen, (uint8_t*) target_address);
 
 			write_byte_pcf(clr_all);
 		} else if ((pcf_byte & button3) == 0) {
@@ -173,7 +173,10 @@ extern "C" void user_init(void) {
 	strcat((char *) message, ".");
 
 	// Start monitoring button presses
-	xTaskCreate(button_task, "button_task", 1024, NULL, 4, NULL);
+	xTaskCreate(button_task, "button_task", 1024, NULL, 3, NULL);
+
+	// Start listening for messages
+	xTaskCreate(receive_packet, "receive_packet", 1024, NULL, 3, NULL);
 
 	// TODO: add mutex semaphor
 	// TODO: light leds when sending & receiving messages
