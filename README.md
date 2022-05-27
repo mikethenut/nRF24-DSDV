@@ -85,6 +85,7 @@ The example in *test.cpp* first determines its own local address. It enables pri
 
 ## Sources & Reading
 
+- Relevant literature can be found at the end of *Porocilo.pdf*. 
 - An older version of the [nRF24 library](https://github.com/nRF24/RF24) and its [documentation](https://nrf24.github.io/RF24/index.html) were used to operate the nRF24L01 module. The exact sources used can be provided upon request.
 - This list of [FreeRTOS crashes](https://github.com/SuperHouse/esp-open-rtos/wiki/Crash-Dumps) is useful for debugging.
 - Some advice on [nRF24 addressing](http://maniacalbits.blogspot.com/2013/04/rf24-addressing-nrf24l01-radios-require.html).
