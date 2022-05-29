@@ -10,9 +10,9 @@ The code is commented and can be inspected for implementation details. Here the 
 
 ## Algorithm Structure
 
-The algorithm works by storing entries for each known device in the network. Each entry contains the target address, next hop address, number of hops, a sequence number of entry, whether the entry has been modified, and time since last update. This information is broadcast to nearby devices at user specified intervals, and also monitored internally. All devices use a single network address to coordinate routing information, and also individual addresses to route actual data packets sent by the user. The following is a rough diagram of the program drawn on [Canva](www.canva.com/). The items in red can be accessed by an outside application.
+The algorithm works by storing entries for each known device in the network. Each entry contains the target address, next hop address, number of hops, a sequence number of entry, whether the entry has been modified, and time since last update. This information is broadcast to nearby devices at user specified intervals, and also monitored internally. All devices use a single network address to coordinate routing information, and also individual addresses to route actual data packets sent by the user. The following is a rough diagram of the program drawn on [Canva](http://www.canva.com). The items in red can be accessed by an outside application.
 
-![structure](C:\Users\mihae\BSO_projekt\structure.png)
+![structure](structure.png)
 
 1. Upon calling **DSDV_init**, the algorithm (and device) is initialized. The function creates task **nRF24_listen** (priority 2), which monitors incoming traffic, and sets up a timer that periodically triggers task **brcst_route_info** (priority 6). The task **parse_dsdv_packet** (priority 4), which is activated using a semaphor, is also created.
 2. The task **brcst_route_info** periodically broadcasts modified entries in the routing table. If enough time has passed, it calls **check_table**, which checks the table for unresponsive devices. Under certain conditions it will broadcast the entire routing table by calling **full_table_dump**. Both of these use **nRF24_transmit** to send out the data.
@@ -85,6 +85,7 @@ The example in *test.cpp* first determines its own local address. It enables pri
 
 ## Sources & Reading
 
+- Relevant literature can be found at the end of *Porocilo.pdf*. 
 - An older version of the [nRF24 library](https://github.com/nRF24/RF24) and its [documentation](https://nrf24.github.io/RF24/index.html) were used to operate the nRF24L01 module. The exact sources used can be provided upon request.
 - This list of [FreeRTOS crashes](https://github.com/SuperHouse/esp-open-rtos/wiki/Crash-Dumps) is useful for debugging.
 - Some advice on [nRF24 addressing](http://maniacalbits.blogspot.com/2013/04/rf24-addressing-nrf24l01-radios-require.html).
