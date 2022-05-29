@@ -43,8 +43,8 @@ const uint8_t network_address[] = {0x6E, 0x52, 0x46};
 // Determines when an entry is considered dead after no communication (in sec)
 #define TIMEOUT			40
 
-// Determines when an entry is deleted after no communication (in sec)
-#define ENTRY_DELETE	80
+// Determines when an entry is deleted after determined dead (in sec)
+#define ENTRY_DELETE	200
 
 // If enabled, application prints every packet received/sent; can be reconfigured dynamically
 extern bool print_incoming_packet;

@@ -79,11 +79,11 @@ uint8_t read_byte_pcf() {
 #else
 
 void write_byte_pcf(uint8_t data) {
-	printf("ERROR: I2C BUS NOT ENABLED.");
+	printf("ERROR: I2C BUS NOT ENABLED.\n");
 }
 
 uint8_t read_byte_pcf() {
-	printf("ERROR: I2C BUS NOT ENABLED.");
+	printf("ERROR: I2C BUS NOT ENABLED.\n");
 	return NULL;
 }
 
@@ -189,10 +189,17 @@ void nRF24_transmit(uint8_t* data, int len, uint8_t* addr) {
 	vTaskDelay(pdMS_TO_TICKS(200));
 	radio.powerUp();
 
+	// If transmitting actual data, turn on auto acknowledgement for the packet (custom implementation would be better)
+	if(!equal_addr(addr, (uint8_t*) network_address))
+		radio.setAutoAck(true);
+
 	radio.openWritingPipe(addr);
 	radio.write(data, len, true);
 
 	radio.toggleAllPipes(false);
+	if(!equal_addr(addr, (uint8_t*) network_address))
+		radio.setAutoAck(false);
+
 	radio.openReadingPipe(0, network_address);
 	radio.openReadingPipe(1, device_address);
 	radio.startListening();
@@ -369,12 +376,26 @@ void check_table() {
 		printf("check_table: checking table for dead entries.\n");
 
 	TickType_t current_time = xTaskGetTickCount();
-	for(int i = 1; i < table_size_cur; i++) {
-		// If the entry is already dead (odd sequence number), leave it alone
-		if(routing_table[i].sequence_number % 2 != 1 && current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(TIMEOUT * 1000)) {
-			routing_table[i].sequence_number++;
-			routing_table[i].hops = 255;
-			routing_table[i].modified = true;
+	int dead_entry = 0;
+	while(dead_entry != -1) {
+		dead_entry = -1;
+		for(int i = 1; i < table_size_cur; i++) {
+			// Only check neighbours that aren't already dead (odd sequence number)
+			if(routing_table[i].hops == 1 && routing_table[i].sequence_number % 2 != 1 &&
+			   	    current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(TIMEOUT * 1000))
+				dead_entry = i;
+		}
+
+		if(dead_entry != -1) {
+			for(int i = 1; i < table_size_cur; i++) {
+				// Remove all connections using that route
+				if(equal_addr(routing_table[i].next_hop, routing_table[dead_entry].destination)) {
+					routing_table[i].sequence_number++;
+					routing_table[i].hops = 255;
+					routing_table[i].modified = true;
+					routing_table[i].last_rcvd = current_time;
+				}
+			}
 		}
 	}
 
@@ -526,6 +547,9 @@ void update_table() {
 					routing_table[addr_ind].modified = true;
 				}
 				
+			} else if(update_data[i].hops = 255) {
+				// Mark row to broadcast it if neighbour claims it is dead
+				routing_table[addr_ind].modified = true;
 			}
 		}
 	}

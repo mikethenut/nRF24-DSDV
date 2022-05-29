@@ -33,7 +33,7 @@ The following variables can be configured statically inside *dsdv.h*:
 - **DUMP_INTERVAL**: How often the entire routing table should be broadcast.
 - **CHECK_INTERVAL**: How often the routing table should be checked for dead entries.
 - **TIMEOUT**: How long after last communication is a device considered dead.
-- **ENTRY_DELETE**: How long after last communication is a routing table row removed.
+- **ENTRY_DELETE**: How long after a row is determined dead it is removed.
 
 The following data fields can be configured or accessed dynamically during execution:
 
