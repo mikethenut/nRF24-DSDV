@@ -404,7 +404,8 @@ void check_table() {
 	while(to_remove != -1) {
 		to_remove = -1;
 		for(int i = 1; i < table_size_cur; i++) {
-			if(current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(ENTRY_DELETE * 1000))
+			if(routing_table[i].sequence_number % 2 == 1  &&
+					current_time - routing_table[i].last_rcvd > pdMS_TO_TICKS(ENTRY_DELETE * 1000))
 				to_remove = i;
 		}
 
