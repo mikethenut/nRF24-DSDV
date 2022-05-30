@@ -548,7 +548,7 @@ void update_table() {
 					routing_table[addr_ind].modified = true;
 				}
 				
-			} else if(update_data[i].hops = 255) {
+			} else if(update_data[i].hops == 255) {
 				// Mark row to broadcast it if neighbour claims it is dead
 				routing_table[addr_ind].modified = true;
 			}
